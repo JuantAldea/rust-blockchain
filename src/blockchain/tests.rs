@@ -71,6 +71,7 @@ fn test_chain_break_index() {
 
 #[test]
 fn test_chain_break_previous_hash() {
+    use generic_array::GenericArray;
     let mut chain = BlockChain::new();
     let block1 = Block::new(128);
 
@@ -88,7 +89,7 @@ fn test_chain_break_previous_hash() {
     println!("{:?}", chain.check_chain());
     assert_eq!(chain.check_chain(), BlockChainError::BlockChainOk);
 
-    chain.chain[1].previous_hash = 0;
+    chain.chain[1].previous_hash = GenericArray::default();
 
     chain.add_block(block1);
     println!("{:?}", chain);

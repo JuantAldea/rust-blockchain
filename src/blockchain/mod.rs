@@ -1,5 +1,4 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
+use sha2::{Digest, Sha256};
 
 use crate::block::*;
 
@@ -24,6 +23,7 @@ impl BlockChain {
             chain: vec![Block::new(0)],
         }
     }
+
     pub fn check_chain(&self) -> BlockChainError {
         for i in 0..self.chain.len() {
             let error = self.check_block(i);
@@ -34,14 +34,21 @@ impl BlockChain {
         BlockChainError::BlockChainOk
     }
 
-    pub fn check_proof(block: &Block, proof: u64) -> BlockChainError {
-        let mut s = DefaultHasher::new();
-        s.write_u64(calculate_hash(block));
-        s.write_u64(block.proof);
-        s.write_u64(proof);
+    pub fn calculate_proof(
+        block: &Block,
+        proof: u64,
+    ) -> sha2::digest::generic_array::GenericArray<u8, <Sha256 as Digest>::OutputSize> {
+        let mut s = Sha256::new();
+        s.input(block.hash());
+        s.input(block.proof.to_be_bytes());
+        s.input(proof.to_be_bytes());
+        s.result()
+    }
 
-        let hash = s.finish().to_string();
-        if &hash[hash.len() - 4..] == "0000" {
+    pub fn check_proof(block: &Block, proof: u64) -> BlockChainError {
+        let proof_of_work = Self::calculate_proof(block, proof);
+        let string_hash = format!("{:x}", proof_of_work);
+        if &string_hash[string_hash.len() - 4..] == "0000" {
             BlockChainError::BlockChainOk
         } else {
             BlockChainError::ProofOfWorkError
@@ -53,7 +60,7 @@ impl BlockChain {
             return BlockChainError::BlockChainOk;
         }
 
-        if calculate_hash(&self.chain[index - 1]) != self.chain[index].previous_hash {
+        if self.chain[index].previous_hash != self.chain[index - 1].hash() {
             return BlockChainError::HashMismatch;
         }
 
@@ -72,9 +79,9 @@ impl BlockChain {
 
     pub fn add_block(&mut self, mut block: Block) {
         let last_block = self.chain.last().unwrap();
-        block.previous_hash = calculate_hash(last_block);
-        block.index = last_block.index + 1;
-
+        block.previous_hash = self.get_last_hash();
+        block.index = self.get_last_index() + 1;
+        println!("Mining for block {:}", block);
         loop {
             if BlockChain::check_proof(last_block, block.proof) == BlockChainError::BlockChainOk {
                 break;
@@ -83,5 +90,37 @@ impl BlockChain {
         }
 
         self.chain.push(block);
+    }
+
+    pub fn get_last_index(&self) -> u64 {
+        self.chain.last().unwrap().index
+    }
+
+    pub fn get_last_hash(
+        &self,
+    ) -> sha2::digest::generic_array::GenericArray<u8, <Sha256 as Digest>::OutputSize> {
+        self.chain.last().unwrap().hash()
+    }
+}
+
+use std::fmt;
+impl fmt::Display for BlockChain {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Genesis block:").unwrap();
+        writeln!(f, "{}", self.chain[0]).unwrap();
+        for i in 1..self.chain.len() {
+            let current_block = &self.chain[i];
+            let previous_block = &self.chain[i - 1];
+            writeln!(
+                f,
+                "POW[{:}-{:}]: {:x}",
+                i - 1,
+                i,
+                Self::calculate_proof(previous_block, current_block.proof)
+            )
+            .unwrap();
+            writeln!(f, "{}", current_block).unwrap();
+        }
+        write!(f, "")
     }
 }
