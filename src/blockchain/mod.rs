@@ -18,9 +18,9 @@ pub struct BlockChain {
 }
 
 impl BlockChain {
-    pub fn new() -> Self {
+    pub fn new(transactions: Vec<Transaction>) -> Self {
         BlockChain {
-            chain: vec![Block::new(0)],
+            chain: vec![Block::new(transactions)],
         }
     }
 
@@ -77,19 +77,21 @@ impl BlockChain {
         BlockChainError::BlockChainOk
     }
 
-    pub fn add_block(&mut self, mut block: Block) {
+    pub fn add_block(&mut self, mut new_block: Block) {
         let last_block = self.chain.last().unwrap();
-        block.previous_hash = self.get_last_hash();
-        block.index = self.get_last_index() + 1;
-        println!("Mining for block {:}", block);
+        new_block.previous_hash = self.get_last_hash();
+        new_block.index = self.get_last_index() + 1;
+        println!("Mining for block {:}", new_block);
+
         loop {
-            if BlockChain::check_proof(last_block, block.proof) == BlockChainError::BlockChainOk {
+            if BlockChain::check_proof(last_block, new_block.proof) == BlockChainError::BlockChainOk
+            {
                 break;
             }
-            block.proof += 1;
+            new_block.proof += 1;
         }
 
-        self.chain.push(block);
+        self.chain.push(new_block);
     }
 
     pub fn get_last_index(&self) -> u64 {
@@ -106,9 +108,10 @@ impl BlockChain {
 use std::fmt;
 impl fmt::Display for BlockChain {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "Genesis block:").unwrap();
-        writeln!(f, "{}", self.chain[0]).unwrap();
+        writeln!(f, "Genesis block:")?;
+        write!(f, "{}", self.chain[0])?;
         for i in 1..self.chain.len() {
+            writeln!(f)?;
             let current_block = &self.chain[i];
             let previous_block = &self.chain[i - 1];
             writeln!(
@@ -117,10 +120,9 @@ impl fmt::Display for BlockChain {
                 i - 1,
                 i,
                 Self::calculate_proof(previous_block, current_block.proof)
-            )
-            .unwrap();
-            writeln!(f, "{}", current_block).unwrap();
+            )?;
+            write!(f, "{:}", current_block)?;
         }
-        write!(f, "")
+        Ok(())
     }
 }

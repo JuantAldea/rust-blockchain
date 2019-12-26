@@ -6,13 +6,24 @@ fn block_hash() {
         index: 1,
         previous_hash: GenericArray::default(),
         timestamp: 3,
-        transaction: 4,
+        transactions: vec![
+            Transaction {
+                sender: 1024,
+                recipient: 0,
+                amount: 0,
+            },
+            Transaction {
+                sender: 2048,
+                recipient: 0,
+                amount: 0,
+            },
+        ],
         proof: 5,
     };
 
     let block_hash = [
-        215, 1, 133, 107, 24, 176, 226, 223, 99, 179, 8, 183, 126, 100, 144, 175, 167, 119, 166,
-        90, 242, 241, 175, 21, 133, 88, 191, 223, 157, 136, 183, 245,
+        150, 106, 200, 78, 143, 187, 171, 59, 57, 26, 131, 101, 66, 31, 195, 153, 129, 224, 214,
+        190, 70, 120, 10, 110, 158, 92, 34, 91, 230, 169, 97, 5,
     ];
 
     let hash = block.hash();
