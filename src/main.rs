@@ -9,6 +9,7 @@ fn main() {
         recipient: 0,
         amount: 0,
     }]);
+
     println!("{}\n", chain);
     println!("{:?}\n", chain.check_chain());
 
@@ -29,6 +30,7 @@ fn main() {
     }]);
 
     chain.add_block(block);
+
     println!("\n{}\n", chain);
     println!("{:?}\n", chain.check_chain());
 
@@ -58,4 +60,6 @@ fn main() {
     chain.add_block(block);
     println!("\n{}\n", chain);
     println!("{:?}\n", chain.check_chain());
+
+    println!("{}", serde_json::to_string_pretty(&chain).unwrap());
 }

@@ -1,20 +1,19 @@
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 mod tests;
-use generic_array::GenericArray;
+use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Transaction {
     pub sender: u64,
     pub recipient: u64,
     pub amount: u64,
 }
 
-//#[derive(Hash)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
     pub index: u64,
-    pub previous_hash: GenericArray<u8, <Sha256 as Digest>::OutputSize>,
+    pub previous_hash: [u8; 32],
     timestamp: u128,
     pub proof: u64,
     pub transactions: Vec<Transaction>,
@@ -25,7 +24,7 @@ impl Block {
         let start = SystemTime::now();
         Block {
             index: 0,
-            previous_hash: GenericArray::default(),
+            previous_hash: [0u8; 32],
             timestamp: start.duration_since(UNIX_EPOCH).unwrap().as_millis(),
             transactions,
             proof: 0,
@@ -34,7 +33,7 @@ impl Block {
 
     pub fn hash(
         &self,
-    ) -> sha2::digest::generic_array::GenericArray<u8, <Sha256 as Digest>::OutputSize> {
+    ) -> [u8; 32] {
         let mut s = Sha256::new();
         s.input(self.index.to_be_bytes());
         s.input(self.previous_hash);
@@ -45,7 +44,7 @@ impl Block {
             s.input(transaction.amount.to_be_bytes());
         }
         s.input(self.proof.to_be_bytes());
-        s.result()
+        s.result().into()
     }
 
     //pub fn get_proof(&self) -> u64 { self.proof }
@@ -58,12 +57,12 @@ impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "index: {:}; timestamp: {:}; proof: {:x}; previous_hash: {:x}; current_hash: {:x};",
+            "index: {:}; timestamp: {:}; proof: {:x}; previous_hash: {:}; current_hash: {:};",
             self.index,
             self.timestamp,
             self.proof,
-            self.previous_hash,
-            self.hash()
+            hex::encode(self.previous_hash),
+            hex::encode(self.hash())
         )?;
 
         writeln!(f)?;

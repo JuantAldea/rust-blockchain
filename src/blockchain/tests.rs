@@ -73,9 +73,8 @@ fn test_chain_break_index() {
 
 #[test]
 fn test_chain_break_previous_hash() {
-    use generic_array::GenericArray;
     let mut chain = generate_chain();
-    chain.chain[1].previous_hash = GenericArray::default();
+    chain.chain[1].previous_hash = [0u8; 32];
 
     println!("{}", chain);
     println!("{:?}", chain.check_chain());

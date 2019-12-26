@@ -4,7 +4,7 @@ use super::*;
 fn block_hash() {
     let block = Block {
         index: 1,
-        previous_hash: GenericArray::default(),
+        previous_hash: [0u8; 32],
         timestamp: 3,
         transactions: vec![
             Transaction {
@@ -26,7 +26,6 @@ fn block_hash() {
         190, 70, 120, 10, 110, 158, 92, 34, 91, 230, 169, 97, 5,
     ];
 
-    let hash = block.hash();
-    let hash: [u8; 32] = hash.into();
+    let hash: [u8; 32] = block.hash().into();
     assert_eq!(block_hash, hash);
 }

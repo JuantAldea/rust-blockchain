@@ -10,3 +10,6 @@ edition = "2018"
 sha2 = "*"
 cargo-modules = "0.4.4"
 generic-array = "0.12.3"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+hex = "*"

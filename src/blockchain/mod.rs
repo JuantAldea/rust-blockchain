@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha256};
-
+use serde::{Deserialize, Serialize};
 use crate::block::*;
 
 mod tests;
@@ -12,7 +12,7 @@ pub enum BlockChainError {
     IndexMismatch,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct BlockChain {
     pub chain: Vec<Block>,
 }
@@ -100,8 +100,8 @@ impl BlockChain {
 
     pub fn get_last_hash(
         &self,
-    ) -> sha2::digest::generic_array::GenericArray<u8, <Sha256 as Digest>::OutputSize> {
-        self.chain.last().unwrap().hash()
+    ) -> [u8; 32] {
+        self.chain.last().unwrap().hash().into()
     }
 }
 
