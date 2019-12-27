@@ -4,11 +4,14 @@ use block::*;
 use blockchain::*;
 
 fn main() {
-    let mut chain = BlockChain::new(vec![Transaction {
-        sender: 0,
-        recipient: 0,
-        amount: 0,
-    }]);
+    let mut chain = BlockChain::new(
+        4,
+        vec![Transaction {
+            sender: 0,
+            recipient: 0,
+            amount: 0,
+        }],
+    );
 
     println!("{}\n", chain);
     println!("{:?}\n", chain.check_chain());

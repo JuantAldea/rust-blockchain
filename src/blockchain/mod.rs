@@ -1,6 +1,6 @@
-use sha2::{Digest, Sha256};
-use serde::{Deserialize, Serialize};
 use crate::block::*;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 mod tests;
 
@@ -15,12 +15,14 @@ pub enum BlockChainError {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct BlockChain {
     pub chain: Vec<Block>,
+    difficulty: usize,
 }
 
 impl BlockChain {
-    pub fn new(transactions: Vec<Transaction>) -> Self {
+    pub fn new(difficulty: usize, transactions: Vec<Transaction>) -> Self {
         BlockChain {
             chain: vec![Block::new(transactions)],
+            difficulty,
         }
     }
 
@@ -36,7 +38,7 @@ impl BlockChain {
 
     pub fn calculate_proof(
         block: &Block,
-        proof: u64,
+        proof: u128,
     ) -> sha2::digest::generic_array::GenericArray<u8, <Sha256 as Digest>::OutputSize> {
         let mut s = Sha256::new();
         s.input(block.hash());
@@ -45,10 +47,10 @@ impl BlockChain {
         s.result()
     }
 
-    pub fn check_proof(block: &Block, proof: u64) -> BlockChainError {
+    pub fn check_proof(&self, block: &Block, proof: u128) -> BlockChainError {
         let proof_of_work = Self::calculate_proof(block, proof);
         let string_hash = format!("{:x}", proof_of_work);
-        if &string_hash[string_hash.len() - 4..] == "0000" {
+        if string_hash[string_hash.len() - self.difficulty..] == "0".repeat(self.difficulty) {
             BlockChainError::BlockChainOk
         } else {
             BlockChainError::ProofOfWorkError
@@ -64,7 +66,7 @@ impl BlockChain {
             return BlockChainError::HashMismatch;
         }
 
-        if BlockChain::check_proof(&self.chain[index - 1], self.chain[index].proof)
+        if self.check_proof(&self.chain[index - 1], self.chain[index].proof)
             != BlockChainError::BlockChainOk
         {
             return BlockChainError::ProofOfWorkError;
@@ -84,8 +86,7 @@ impl BlockChain {
         println!("Mining for block {:}", new_block);
 
         loop {
-            if BlockChain::check_proof(last_block, new_block.proof) == BlockChainError::BlockChainOk
-            {
+            if self.check_proof(last_block, new_block.proof) == BlockChainError::BlockChainOk {
                 break;
             }
             new_block.proof += 1;
@@ -94,14 +95,12 @@ impl BlockChain {
         self.chain.push(new_block);
     }
 
-    pub fn get_last_index(&self) -> u64 {
+    pub fn get_last_index(&self) -> u128 {
         self.chain.last().unwrap().index
     }
 
-    pub fn get_last_hash(
-        &self,
-    ) -> [u8; 32] {
-        self.chain.last().unwrap().hash().into()
+    pub fn get_last_hash(&self) -> SHA256Hash {
+        self.chain.last().unwrap().hash()
     }
 }
 

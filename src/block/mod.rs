@@ -5,17 +5,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Transaction {
-    pub sender: u64,
-    pub recipient: u64,
-    pub amount: u64,
+    pub sender: u128,
+    pub recipient: u128,
+    pub amount: u128,
 }
+
+pub type SHA256Hash = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
-    pub index: u64,
-    pub previous_hash: [u8; 32],
+    pub index: u128,
+    pub previous_hash: SHA256Hash,
     timestamp: u128,
-    pub proof: u64,
+    pub proof: u128,
     pub transactions: Vec<Transaction>,
 }
 
@@ -31,9 +33,7 @@ impl Block {
         }
     }
 
-    pub fn hash(
-        &self,
-    ) -> [u8; 32] {
+    pub fn hash(&self) -> SHA256Hash {
         let mut s = Sha256::new();
         s.input(self.index.to_be_bytes());
         s.input(self.previous_hash);

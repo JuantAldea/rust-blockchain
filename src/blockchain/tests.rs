@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 use super::Block;
 use super::BlockChain;
@@ -7,18 +6,21 @@ use super::*;
 
 #[allow(dead_code)]
 fn generate_chain() -> BlockChain {
-    let mut chain = BlockChain::new(vec![
-        Transaction {
-            sender: 1024,
-            recipient: 0,
-            amount: 0,
-        },
-        Transaction {
-            sender: 2048,
-            recipient: 0,
-            amount: 0,
-        },
-    ]);
+    let mut chain = BlockChain::new(
+        4,
+        vec![
+            Transaction {
+                sender: 1024,
+                recipient: 0,
+                amount: 0,
+            },
+            Transaction {
+                sender: 2048,
+                recipient: 0,
+                amount: 0,
+            },
+        ],
+    );
 
     let block = Block::new(vec![
         Transaction {
@@ -105,7 +107,31 @@ fn test_chain_break_transaction() {
 #[test]
 fn test_genesis_chain() {
     assert_eq!(
-        BlockChain::new(vec![
+        BlockChain::new(
+            4,
+            vec![
+                Transaction {
+                    sender: 1024,
+                    recipient: 0,
+                    amount: 0,
+                },
+                Transaction {
+                    sender: 2048,
+                    recipient: 0,
+                    amount: 0,
+                },
+            ]
+        )
+        .check_chain(),
+        BlockChainError::BlockChainOk
+    );
+}
+
+#[test]
+fn test_add_block() {
+    let mut chain = BlockChain::new(
+        4,
+        vec![
             Transaction {
                 sender: 1024,
                 recipient: 0,
@@ -116,26 +142,8 @@ fn test_genesis_chain() {
                 recipient: 0,
                 amount: 0,
             },
-        ])
-        .check_chain(),
-        BlockChainError::BlockChainOk
+        ],
     );
-}
-
-#[test]
-fn test_add_block() {
-    let mut chain = BlockChain::new(vec![
-        Transaction {
-            sender: 1024,
-            recipient: 0,
-            amount: 0,
-        },
-        Transaction {
-            sender: 2048,
-            recipient: 0,
-            amount: 0,
-        },
-    ]);
 
     chain.add_block(Block::new(vec![
         Transaction {
