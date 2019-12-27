@@ -1,68 +1,69 @@
-pub mod block;
 pub mod blockchain;
-use block::*;
-use blockchain::*;
+
+use blockchain::block::*;
+use blockchain::chain::*;
+use blockchain::transaction::*;
+use blockchain::wallet::*;
 
 fn main() {
     let mut chain = BlockChain::new(
         4,
-        vec![Transaction {
-            sender: 0,
-            recipient: 0,
-            amount: 0,
-        }],
+        vec![
+            Transaction::new(0, &String::from("0").repeat(64), 0, 1, 20),
+            Transaction::new(0, &String::from("0").repeat(64), 0, 2, 20),
+            //Transaction::new(0, &String::from("0").repeat(64), 0, 3, 20),
+        ],
     );
 
-    println!("{}\n", chain);
-    println!("{:?}\n", chain.check_chain());
+    println!("{}", chain);
+    println!("==========================================================================");
+    //println!("{:?}\n", chain.check_chain());
+    let wallet1 = Wallet::new(&chain, 1);
+    let wallet2 = Wallet::new(&chain, 2);
+    //let wallet3 = Wallet::new(&chain, 3);
 
-    let block = Block::new(vec![Transaction {
-        sender: 128,
-        recipient: 0,
-        amount: 0,
-    }]);
+    println!("Wallet1 {:}", wallet1);
+    println!("Wallet2 {:}", wallet2);
+    println!("==========================================================================");
 
+    //println!("{:}", wallet3);
+
+    let block = wallet1.create_transaction(2, 15).unwrap();
+
+    println!("New block: {}\n", block);
     chain.add_block(block);
-    println!("\n{}\n", chain);
-    println!("{:?}\n", chain.check_chain());
+    println!("==========================================================================");
+    println!("New chain:\n{}\n", chain);
+    println!("==========================================================================");
+    //println!("{:?}\n", chain.check_chain());
 
-    let block = Block::new(vec![Transaction {
-        sender: 256,
-        recipient: 0,
-        amount: 0,
-    }]);
+    let wallet1 = Wallet::new(&chain, 1);
+    let wallet2 = Wallet::new(&chain, 2);
 
+    println!("Wallet1:\n{:}", wallet1);
+    println!("Wallet2:\n{:}", wallet2);
+
+    let block = wallet1.create_transaction(2, 5).unwrap();
+
+    println!("New block: {}\n", block);
     chain.add_block(block);
 
-    println!("\n{}\n", chain);
-    println!("{:?}\n", chain.check_chain());
+    let wallet1 = Wallet::new(&chain, 1);
+    let wallet2 = Wallet::new(&chain, 2);
 
-    let block = Block::new(vec![Transaction {
-        sender: 512,
-        recipient: 0,
-        amount: 0,
-    }]);
+    println!("Wallet1:\n{:}", wallet1);
+    println!("Wallet2:\n{:}", wallet2);
 
+    let block = wallet2.create_transaction(1, 23).unwrap();
+
+    println!("New block: {}\n", block);
     chain.add_block(block);
-    println!("\n{}\n", chain);
-    println!("{:?}\n", chain.check_chain());
 
-    let block = Block::new(vec![
-        Transaction {
-            sender: 1024,
-            recipient: 0,
-            amount: 0,
-        },
-        Transaction {
-            sender: 2048,
-            recipient: 0,
-            amount: 0,
-        },
-    ]);
+    let wallet1 = Wallet::new(&chain, 1);
+    let wallet2 = Wallet::new(&chain, 2);
 
-    chain.add_block(block);
-    println!("\n{}\n", chain);
-    println!("{:?}\n", chain.check_chain());
+    println!("Wallet1:\n{:}", wallet1);
+    println!("Wallet2:\n{:}", wallet2);
 
-    println!("{}", serde_json::to_string_pretty(&chain).unwrap());
+    //println!("{:?}\n", chain.check_chain());
 }
