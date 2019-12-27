@@ -15,7 +15,7 @@ pub struct Transaction {
 impl Transaction {
     pub fn new(
         input_block_id: u128,
-        input_uxto_hash: &String,
+        input_uxto_hash: &str,
         sender: u128,
         recipient: u128,
         amount: u128,
@@ -30,7 +30,7 @@ impl Transaction {
 
         Transaction {
             input_block_id,
-            input_uxto_hash: input_uxto_hash.clone(),
+            input_uxto_hash: input_uxto_hash.to_string(),
             sender,
             recipient,
             amount,

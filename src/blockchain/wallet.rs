@@ -5,8 +5,24 @@ use std::cmp;
 use std::fmt;
 
 #[derive(Debug, Clone)]
+pub struct UXTO {
+    pub block_id: u128,
+    pub hash: String,
+    pub amount: u128,
+}
+
+impl fmt::Display for UXTO {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "in_block: {}: {}: {}",
+            self.block_id, self.hash, self.amount
+        )
+    }
+}
+#[derive(Debug, Clone)]
 pub struct Wallet {
-    pub unexpend: Vec<(u128, Transaction)>,
+    pub unexpend: Vec<UXTO>,
     pub total_credits: u128,
     pub id: u128,
 }
@@ -31,15 +47,20 @@ impl Wallet {
         let mut total_credits = 0;
         for (index_in, in_uxto) in input_uxtos {
             let mut expend = false;
-            for (index_out, out_uxto) in &ouput_uxtos {
+            for (_, out_uxto) in &ouput_uxtos {
                 if out_uxto.input_uxto_hash == in_uxto.transaction_hash {
                     expend = true;
                     break;
                 }
             }
+
             if !expend {
                 total_credits += in_uxto.amount;
-                unexpend.push((index_in, in_uxto.clone()));
+                unexpend.push(UXTO {
+                    block_id: index_in,
+                    hash: in_uxto.transaction_hash,
+                    amount: in_uxto.amount,
+                });
             }
         }
 
@@ -60,32 +81,33 @@ impl Wallet {
         }
 
         while sum < amount {
-            let uxto: &(u128, Transaction) = uxtos_iter.next().unwrap();
+            let uxto: &UXTO = uxtos_iter.next().unwrap();
             uxtos.push(uxto);
-            sum += uxto.1.amount;
-            println!("Adding uxto: {}: {}", uxto.0, uxto.1)
+            sum += uxto.amount;
+            //println!("Adding uxto: {}: {} : {}", uxto.0, uxto.1, uxto.2)
         }
 
         assert!(sum >= amount);
 
         let mut transfers = vec![];
         let mut processed_transfer = 0;
-        for (block_id, transaction) in uxtos.iter() {
-            let fraction_to_transfer = cmp::min(amount - processed_transfer, transaction.amount);
-            let fraction_to_send_back = transaction.amount - fraction_to_transfer;
+        for uxto in uxtos.iter() {
+            let fraction_to_transfer = cmp::min(amount - processed_transfer, uxto.amount);
+
             processed_transfer += fraction_to_transfer;
             transfers.push(Transaction::new(
-                *block_id,
-                &transaction.transaction_hash,
+                uxto.block_id,
+                &uxto.hash,
                 self.id,
                 id,
                 fraction_to_transfer,
             ));
 
+            let fraction_to_send_back = uxto.amount - fraction_to_transfer;
             if fraction_to_send_back > 0 {
                 transfers.push(Transaction::new(
-                    *block_id,
-                    &transaction.transaction_hash,
+                    uxto.block_id,
+                    &uxto.hash,
                     self.id,
                     self.id,
                     fraction_to_send_back,
@@ -105,15 +127,10 @@ impl fmt::Display for Wallet {
             return writeln!(f, "Wallet is empty");
         }
 
-        for (i, transaction) in &self.unexpend[..self.unexpend.len() - 1] {
-            writeln!(f, "in_block: {}: {} ", i, transaction)?;
+        for uxto in &self.unexpend[..self.unexpend.len() - 1] {
+            writeln!(f, "{}", uxto)?;
         }
 
-        write!(
-            f,
-            "in_block: {}: {} ",
-            self.unexpend.last().unwrap().0,
-            self.unexpend.last().unwrap().1
-        )
+        write!(f, "{}", self.unexpend.last().unwrap())
     }
 }

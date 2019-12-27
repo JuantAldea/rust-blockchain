@@ -48,22 +48,26 @@ fn main() {
     println!("New block: {}\n", block);
     chain.add_block(block);
 
+    println!("==========================================================================");
     let wallet1 = Wallet::new(&chain, 1);
     let wallet2 = Wallet::new(&chain, 2);
 
     println!("Wallet1:\n{:}", wallet1);
     println!("Wallet2:\n{:}", wallet2);
+    println!("==========================================================================");
 
     let block = wallet2.create_transaction(1, 23).unwrap();
 
     println!("New block: {}\n", block);
     chain.add_block(block);
-
+    println!("{}", chain);
+    println!("==========================================================================");
     let wallet1 = Wallet::new(&chain, 1);
     let wallet2 = Wallet::new(&chain, 2);
 
     println!("Wallet1:\n{:}", wallet1);
     println!("Wallet2:\n{:}", wallet2);
 
-    //println!("{:?}\n", chain.check_chain());
+    println!("==========================================================================");
+    println!("{:?}\n", chain.check_chain());
 }
