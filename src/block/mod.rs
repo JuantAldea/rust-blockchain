@@ -13,7 +13,7 @@ pub struct Transaction {
 pub struct Block {
     pub index: u128,
     pub previous_hash: String,
-    timestamp: u128,
+    pub timestamp: u128,
     pub proof: u128,
     pub transactions: Vec<Transaction>,
 }

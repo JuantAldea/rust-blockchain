@@ -21,8 +21,9 @@ fn generate_chain() -> BlockChain {
             },
         ],
     );
+    chain.chain[0].timestamp = 0;
 
-    let block = Block::new(vec![
+    let mut block = Block::new(vec![
         Transaction {
             sender: 1024,
             recipient: 0,
@@ -35,8 +36,10 @@ fn generate_chain() -> BlockChain {
         },
     ]);
 
+    block.timestamp = 1;
     chain.add_block(block);
-    let block = Block::new(vec![
+
+    let mut block = Block::new(vec![
         Transaction {
             sender: 1024,
             recipient: 0,
@@ -49,8 +52,36 @@ fn generate_chain() -> BlockChain {
         },
     ]);
 
+    block.timestamp = 2;
+    chain.add_block(block);
+
+    let mut block = Block::new(vec![
+        Transaction {
+            sender: 4096,
+            recipient: 0,
+            amount: 0,
+        },
+        Transaction {
+            sender: 8192,
+            recipient: 0,
+            amount: 0,
+        },
+    ]);
+
+    block.timestamp = 3;
     chain.add_block(block);
     chain
+}
+
+#[test]
+fn test_chain2() {
+    let chain = generate_chain();
+
+    println!("{}", chain);
+    println!("{:?}", chain.check_chain());
+    println!("{}", chain.get_last_hash());
+    assert_eq!(chain.get_last_hash(), "8505d00d102d65b9f473d64e1ee1602fad7f7c4115a6385e9b8c6bde128ee24b");
+    assert_eq!(chain.check_chain(), BlockChainError::BlockChainOk);
 }
 
 #[test]
