@@ -1,4 +1,3 @@
-use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 mod tests;
 use serde::{Deserialize, Serialize};
@@ -10,12 +9,10 @@ pub struct Transaction {
     pub amount: u128,
 }
 
-pub type SHA256Hash = [u8; 32];
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
     pub index: u128,
-    pub previous_hash: SHA256Hash,
+    pub previous_hash: String,
     timestamp: u128,
     pub proof: u128,
     pub transactions: Vec<Transaction>,
@@ -26,29 +23,27 @@ impl Block {
         let start = SystemTime::now();
         Block {
             index: 0,
-            previous_hash: [0u8; 32],
+            previous_hash: String::from("0").repeat(64),
             timestamp: start.duration_since(UNIX_EPOCH).unwrap().as_millis(),
             transactions,
             proof: 0,
         }
     }
 
-    pub fn hash(&self) -> SHA256Hash {
-        let mut s = Sha256::new();
-        s.input(self.index.to_be_bytes());
-        s.input(self.previous_hash);
-        s.input(self.timestamp.to_be_bytes());
+    pub fn hash(&self) -> String {
+        let mut bytes = vec![];
+        bytes.extend(&self.index.to_be_bytes());
+        bytes.extend(self.previous_hash.bytes());
+        bytes.extend(&self.timestamp.to_be_bytes());
         for transaction in &self.transactions {
-            s.input(transaction.sender.to_be_bytes());
-            s.input(transaction.recipient.to_be_bytes());
-            s.input(transaction.amount.to_be_bytes());
+            bytes.extend(&transaction.sender.to_be_bytes());
+            bytes.extend(&transaction.recipient.to_be_bytes());
+            bytes.extend(&transaction.amount.to_be_bytes());
         }
-        s.input(self.proof.to_be_bytes());
-        s.result().into()
-    }
+        bytes.extend(&self.proof.to_be_bytes());
 
-    //pub fn get_proof(&self) -> u64 { self.proof }
-    //pub fn get_index(&self) -> u64 { self.index }
+        crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
+    }
 }
 
 use std::fmt;
@@ -61,8 +56,8 @@ impl fmt::Display for Block {
             self.index,
             self.timestamp,
             self.proof,
-            hex::encode(self.previous_hash),
-            hex::encode(self.hash())
+            self.previous_hash,
+            self.hash()
         )?;
 
         writeln!(f)?;

@@ -4,7 +4,7 @@ use super::*;
 fn block_hash() {
     let block = Block {
         index: 1,
-        previous_hash: [0u8; 32],
+        previous_hash: String::from("0").repeat(64),
         timestamp: 3,
         transactions: vec![
             Transaction {
@@ -21,11 +21,6 @@ fn block_hash() {
         proof: 5,
     };
 
-    let block_hash = [
-        25, 137, 162, 228, 182, 79, 0, 141, 6, 93, 164, 76, 112, 141, 248, 95, 66, 140, 70, 126,
-        12, 85, 25, 177, 130, 74, 157, 117, 44, 56, 212, 140,
-    ];
-
-    let hash: [u8; 32] = block.hash().into();
-    assert_eq!(block_hash, hash);
+    let block_hash = "541cecc1c6af2ecb4f7b9a7e1353c9cebf02490d121e319df5c02d9a98938f99";
+    assert_eq!(block_hash, block.hash());
 }

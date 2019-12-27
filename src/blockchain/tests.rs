@@ -76,7 +76,7 @@ fn test_chain_break_index() {
 #[test]
 fn test_chain_break_previous_hash() {
     let mut chain = generate_chain();
-    chain.chain[1].previous_hash = [0u8; 32];
+    chain.chain[1].previous_hash = String::from("0").repeat(64);
 
     println!("{}", chain);
     println!("{:?}", chain.check_chain());

@@ -1,6 +1,5 @@
 use crate::block::*;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 mod tests;
 
@@ -36,21 +35,17 @@ impl BlockChain {
         BlockChainError::BlockChainOk
     }
 
-    pub fn calculate_proof(
-        block: &Block,
-        proof: u128,
-    ) -> sha2::digest::generic_array::GenericArray<u8, <Sha256 as Digest>::OutputSize> {
-        let mut s = Sha256::new();
-        s.input(block.hash());
-        s.input(block.proof.to_be_bytes());
-        s.input(proof.to_be_bytes());
-        s.result()
+    pub fn calculate_proof(block: &Block, proof: u128) -> String {
+        let mut bytes = vec![];
+        bytes.extend(block.hash().bytes());
+        bytes.extend(&block.proof.to_be_bytes());
+        bytes.extend(&proof.to_be_bytes());
+        crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
     }
 
     pub fn check_proof(&self, block: &Block, proof: u128) -> BlockChainError {
         let proof_of_work = Self::calculate_proof(block, proof);
-        let string_hash = format!("{:x}", proof_of_work);
-        if string_hash[string_hash.len() - self.difficulty..] == "0".repeat(self.difficulty) {
+        if proof_of_work[proof_of_work.len() - self.difficulty..] == "0".repeat(self.difficulty) {
             BlockChainError::BlockChainOk
         } else {
             BlockChainError::ProofOfWorkError
@@ -99,7 +94,7 @@ impl BlockChain {
         self.chain.last().unwrap().index
     }
 
-    pub fn get_last_hash(&self) -> SHA256Hash {
+    pub fn get_last_hash(&self) -> String {
         self.chain.last().unwrap().hash()
     }
 }
@@ -115,7 +110,7 @@ impl fmt::Display for BlockChain {
             let previous_block = &self.chain[i - 1];
             writeln!(
                 f,
-                "POW[{:}-{:}]: {:x}",
+                "POW[{:}-{:}]: {:}",
                 i - 1,
                 i,
                 Self::calculate_proof(previous_block, current_block.proof)
