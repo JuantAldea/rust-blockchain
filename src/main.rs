@@ -1,6 +1,5 @@
 pub mod blockchain;
 
-use blockchain::block::*;
 use blockchain::chain::*;
 use blockchain::transaction::*;
 use blockchain::wallet::*;
@@ -17,7 +16,6 @@ fn main() {
 
     println!("{}", chain);
     println!("==========================================================================");
-    //println!("{:?}\n", chain.check_chain());
     let wallet1 = Wallet::new(&chain, 1);
     let wallet2 = Wallet::new(&chain, 2);
     //let wallet3 = Wallet::new(&chain, 3);
