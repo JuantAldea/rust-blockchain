@@ -12,3 +12,7 @@ serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 hex = "*"
 crypto-hash = "0.3.4"
+openssl="*"
+bs58="*"
+log="*"
+env_logger ="*"

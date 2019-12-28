@@ -9,16 +9,18 @@ pub struct Block {
     pub previous_hash: String,
     pub timestamp: u128,
     pub proof: u128,
-    pub transactions: Vec<Transaction>,
+    pub transactions: Vec<SignedTransaction>,
 }
 
 impl Block {
-    pub fn new(transactions: Vec<Transaction>) -> Self {
-        let start = SystemTime::now();
+    pub fn new(transactions: Vec<SignedTransaction>) -> Self {
         Block {
             index: 0,
             previous_hash: String::from("0").repeat(64),
-            timestamp: start.duration_since(UNIX_EPOCH).unwrap().as_millis(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
             transactions,
             proof: 0,
         }
@@ -31,7 +33,7 @@ impl Block {
         bytes.extend(&self.timestamp.to_be_bytes());
 
         for transaction in &self.transactions {
-            bytes.extend(transaction.hash().bytes());
+            bytes.extend(transaction.uxto_hash().bytes());
         }
 
         bytes.extend(&self.proof.to_be_bytes());
@@ -45,24 +47,20 @@ impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "index: {:}; timestamp: {:}; proof: {:x}; previous_hash: {:}; current_hash: {:};",
+            "index: {:}; timestamp: {:}; proof: {:x}; previous_hash: {:}...; current_hash: {:}...;",
             self.index,
             self.timestamp,
             self.proof,
-            self.previous_hash,
-            self.hash()
+            &self.previous_hash[..10],
+            &self.hash()[..10]
         )?;
 
         writeln!(f)?;
-        write!(f, "Transactions:")?;
+        writeln!(f, "Transactions:")?;
+        for i in 0..self.transactions.len() - 1 {
+            writeln!(f, "\t{}: {} ", i, self.transactions[i]).unwrap();
+        }
 
-        self.transactions
-            .iter()
-            .enumerate()
-            .for_each(|(i, transaction)| {
-                write!(f, "\n\t{}: {} ", i, transaction).unwrap();
-            });
-
-        Ok(())
+        write!(f, "\t{}: {} ", self.transactions.len() - 1, self.transactions.last().unwrap())
     }
 }

@@ -1,40 +1,37 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use super::id::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct Transaction {
     pub input_block_id: u128,
     pub input_uxto_hash: String,
-    pub sender: u128,
-    pub recipient: u128,
+    pub sender: String,
+    pub recipient: String,
     pub amount: u128,
-    pub transaction_hash: String,
-    //pub signature: String,
+    pub timestamp: u128,
 }
 
 impl Transaction {
     pub fn new(
         input_block_id: u128,
         input_uxto_hash: &str,
-        sender: u128,
-        recipient: u128,
+        sender: &str,
+        recipient: &str,
         amount: u128,
     ) -> Self {
-        let mut bytes = vec![];
-        bytes.extend(&input_block_id.to_be_bytes());
-        bytes.extend(input_uxto_hash.bytes());
-
-        bytes.extend(&sender.to_be_bytes());
-        bytes.extend(&recipient.to_be_bytes());
-        bytes.extend(&amount.to_be_bytes());
-
         Transaction {
             input_block_id,
             input_uxto_hash: input_uxto_hash.to_string(),
-            sender,
-            recipient,
+            sender: sender.to_string(),
+            recipient: recipient.to_string(),
             amount,
-            transaction_hash: crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
         }
     }
 
@@ -42,10 +39,10 @@ impl Transaction {
         let mut bytes = vec![];
         bytes.extend(&self.input_block_id.to_be_bytes());
         bytes.extend(self.input_uxto_hash.bytes());
-
-        bytes.extend(&self.sender.to_be_bytes());
-        bytes.extend(&self.recipient.to_be_bytes());
+        bytes.extend(self.sender.bytes());
+        bytes.extend(self.recipient.bytes());
         bytes.extend(&self.amount.to_be_bytes());
+        bytes.extend(&self.timestamp.to_be_bytes());
         crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
     }
 }
@@ -54,13 +51,67 @@ impl fmt::Display for Transaction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "s: {}; r: {}; a: {}; in_id: {}; in_uxto: {}; out_uxto: {};",
-            self.sender,
-            self.recipient,
+            "trans_time:{:x};in_uxto:{}...;s:{}...;r:{}...;a:{};in_id:{};",
+            self.timestamp,
+            &self.input_uxto_hash[..10],
+            Id::new(&self.sender),
+            Id::new(&self.recipient),
             self.amount,
             self.input_block_id,
-            self.input_uxto_hash,
-            self.transaction_hash
+        )
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+pub struct SignedTransaction {
+    pub transaction: Transaction,
+    pub timestamp: u128,
+    pub signature: String,
+    pub uxto_hash: String,
+}
+
+impl SignedTransaction {
+    pub fn new(transaction: &Transaction) -> Self {
+        let mut tx = Self {
+            transaction: transaction.clone(),
+            signature: String::from("0"),
+            uxto_hash: String::from("0"),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        };
+
+        tx.uxto_hash = tx.uxto_hash();
+        tx
+    }
+
+    pub fn hash_for_signature(&self) -> String {
+        let mut bytes = vec![];
+        bytes.extend(self.transaction.hash().bytes());
+        bytes.extend(&self.timestamp.to_be_bytes());
+        crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
+    }
+
+    pub fn uxto_hash(&self) -> String {
+        let mut bytes = vec![];
+        bytes.extend(self.transaction.hash().bytes());
+        bytes.extend(self.signature.bytes());
+        bytes.extend(&self.timestamp.to_be_bytes());
+        crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
+    }
+}
+
+impl fmt::Display for SignedTransaction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "sign_time:{:x};{}tx_hash:{}...;sign:{}...;out_uxto:{}...;",
+            self.timestamp,
+            self.transaction,
+            &self.transaction.hash()[..10],
+            &self.signature[..10],
+            &self.uxto_hash[..10]
         )
     }
 }

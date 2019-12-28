@@ -1,5 +1,7 @@
 pub mod block;
 pub mod chain;
-mod tests;
+pub mod id;
 pub mod transaction;
 pub mod wallet;
+
+mod tests;
