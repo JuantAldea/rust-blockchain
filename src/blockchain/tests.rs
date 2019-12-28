@@ -1,7 +1,9 @@
 #[cfg(test)]
 use super::block::*;
 use super::transaction::*;
-//use super::chain::*;
+use super::chain::*;
+use super::wallet::*;
+
 
 #[test]
 fn transaction_hash() {
@@ -82,6 +84,86 @@ fn block_hash() {
 
     let block_hash = "6fa9fc0f53a4b7a6c826e768f8bd544359f87f79aadadc42fc9d16a628bcd332";
     assert_eq!(block.hash(), block_hash);
+}
+
+#[test]
+fn double_spend() {
+    let mut wallet1 = Wallet::new();
+    let mut wallet2 = Wallet::new();
+    let tx1 = Transaction::new(
+        0,
+        &String::from("0").repeat(64),
+        &wallet1.id.id,
+        &wallet1.id.id,
+        20,
+    );
+
+    let tx2 = Transaction::new(
+        0,
+        &String::from("0").repeat(64),
+        &wallet2.id.id,
+        &wallet2.id.id,
+        20,
+    );
+
+    let tx1_signed = wallet1.sign_transaction(&tx1);
+    let tx2_signed = wallet2.sign_transaction(&tx2);
+
+    let mut chain = BlockChain::new(2, vec![tx1_signed, tx2_signed]);
+
+    wallet1.read_wallet(&chain);
+    wallet2.read_wallet(&chain);
+
+    let transactions = wallet1.create_transaction(&wallet2.id, 7).unwrap();
+
+    let block = wallet1.sign_transactions(transactions);
+    assert_eq!(chain.validate_block(&block), BlockChainOperationResult::BlockChainOk);
+    chain.add_block(block);
+
+    // request another transaction without updating the wallets. It will pick the same UXTOs
+    let transactions = wallet1.create_transaction(&wallet2.id, 2).unwrap();
+    let block = wallet1.sign_transactions(transactions);
+    // leading to a DoubleExpend
+    assert_eq!(chain.validate_block(&block), BlockChainOperationResult::DoubleExpendingError);
+}
+
+#[test]
+fn try_to_expend_uxtos_from_another() {
+    let wallet1 = Wallet::new();
+    let wallet2 = Wallet::new();
+
+    let tx1 = Transaction::new(
+        0,
+        &String::from("0").repeat(64),
+        &wallet1.id.id,
+        &wallet1.id.id,
+        20,
+    );
+
+    let tx2 = Transaction::new(
+        0,
+        &String::from("0").repeat(64),
+        &wallet2.id.id,
+        &wallet2.id.id,
+        20,
+    );
+
+    let tx1_signed = wallet1.sign_transaction(&tx1);
+    let tx2_signed = wallet2.sign_transaction(&tx2);
+    let tx2_uxto = tx2_signed.uxto_hash.clone();
+    let chain = BlockChain::new(2, vec![tx1_signed, tx2_signed]);
+
+    //steal uxto from wallet2
+    let bogus_tx = Transaction::new(
+        0,
+        &tx2_uxto,
+        &wallet1.id.id,
+        &wallet2.id.id,
+        20,
+    );
+
+    let block = wallet1.sign_transactions(vec![bogus_tx]);
+    assert_eq!(chain.validate_block(&block), BlockChainOperationResult::UXTOOwnershipError);
 }
 
 /*
