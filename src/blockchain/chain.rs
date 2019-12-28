@@ -79,34 +79,41 @@ impl BlockChain {
         BlockChainOperationResult::BlockChainOk
     }
 
+    pub fn validate_transaction_signature(signed_tx: &SignedTransaction) -> BlockChainOperationResult{
+        let sender = &signed_tx.transaction.sender;
+        let transaction_hash = signed_tx.transaction.hash();
+        let transaction_signature_decoded =
+            bs58::decode(&signed_tx.signature).into_vec().unwrap();
+
+        let decoded_key = bs58::decode(sender).into_vec().unwrap();
+        let rsa_public = Rsa::public_key_from_der(&decoded_key).unwrap();
+        let mut buf: Vec<u8> = vec![0u8; 2048];
+        let _len = rsa_public
+            .public_decrypt(&transaction_signature_decoded, &mut buf, Padding::PKCS1)
+            .unwrap();
+        let decrypted_hash = String::from_utf8(buf).unwrap().to_string();
+
+        if transaction_hash == decrypted_hash {
+            return BlockChainOperationResult::SignatureError;
+        }
+
+        BlockChainOperationResult::BlockChainOk
+    }
+
     pub fn validate_block(&self, block: &Block) -> BlockChainOperationResult {
         log::debug!("================== Validating block ======================");
         for signed_tx in &block.transactions {
             log::debug!("Validating transaction");
             log::debug!("{}", signed_tx);
-            let sender = &signed_tx.transaction.sender;
-            let transaction_hash = &signed_tx.transaction.hash();
-            let transaction_signature_decoded =
-                bs58::decode(&signed_tx.signature).into_vec().unwrap();
 
-            //log::debug!("TX SIGNATURE BYTES {:?}", transaction_signature_decoded);
-
-            let decoded_key = bs58::decode(sender).into_vec().unwrap();
-            let rsa_public = Rsa::public_key_from_der(&decoded_key).unwrap();
-            let mut buf: Vec<u8> = vec![0u8; 2048];
-            let _len = rsa_public
-                .public_decrypt(&transaction_signature_decoded, &mut buf, Padding::PKCS1)
-                .unwrap();
-            let decrypted_hash = String::from_utf8(buf).unwrap().to_string();
-
-            //log::debug!("{:}", decrypted_hash);
-
-            if transaction_hash == &decrypted_hash {
-                return BlockChainOperationResult::SignatureError;
+            let is_valid_transaction = BlockChain::validate_transaction_signature(signed_tx);
+            if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
+                return is_valid_transaction;
             }
 
             log::debug!("Signature is valid");
             log::debug!("Validating INPUTS");
+
             let is_valid_transaction = self.validate_transaction_inputs(&signed_tx.transaction);
             if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
                 log::debug!("==================BLOCK IS INVALID======================");
