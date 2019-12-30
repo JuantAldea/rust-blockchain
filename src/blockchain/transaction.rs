@@ -67,23 +67,18 @@ pub struct SignedTransaction {
     pub transaction: Transaction,
     pub timestamp: u128,
     pub signature: String,
-    pub uxto_hash: String,
 }
 
 impl SignedTransaction {
     pub fn new(transaction: &Transaction) -> Self {
-        let mut tx = Self {
+        Self {
             transaction: transaction.clone(),
             signature: String::from("0"),
-            uxto_hash: String::from("0"),
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_nanos(),
-        };
-
-        tx.uxto_hash = tx.uxto_hash();
-        tx
+        }
     }
 
     pub fn hash_for_signature(&self) -> String {
@@ -96,8 +91,8 @@ impl SignedTransaction {
     pub fn uxto_hash(&self) -> String {
         let mut bytes = vec![];
         bytes.extend(self.transaction.hash().bytes());
-        bytes.extend(self.signature.bytes());
         bytes.extend(&self.timestamp.to_be_bytes());
+        bytes.extend(self.signature.bytes());
         crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
     }
 }
@@ -111,7 +106,18 @@ impl fmt::Display for SignedTransaction {
             self.transaction,
             &self.transaction.hash()[..10],
             &self.signature[..10],
-            &self.uxto_hash[..10]
+            &self.uxto_hash()[..10]
         )
+    }
+}
+
+pub struct TransactionsVec(pub Vec<Transaction>);
+
+impl fmt::Display for TransactionsVec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for i in 0..self.0.len() {
+            writeln!(f, "{}: {}", i, self.0[i]).unwrap();
+        }
+        Ok(())
     }
 }

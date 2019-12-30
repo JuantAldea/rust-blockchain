@@ -61,6 +61,11 @@ impl fmt::Display for Block {
             writeln!(f, "\t{}: {} ", i, self.transactions[i]).unwrap();
         }
 
-        write!(f, "\t{}: {} ", self.transactions.len() - 1, self.transactions.last().unwrap())
+        write!(
+            f,
+            "\t{}: {} ",
+            self.transactions.len() - 1,
+            self.transactions.last().unwrap()
+        )
     }
 }

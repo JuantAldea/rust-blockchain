@@ -46,8 +46,7 @@ pub struct Wallet {
 impl Wallet {
     pub fn new() -> Self {
         let rsa_pair = Rsa::generate(1024).unwrap();
-        let rsa_public_key = bs58::encode(rsa_pair.public_key_to_der().unwrap()).into_string();
-        let id = Id::new(&rsa_public_key);
+        let id = Id::new(&bs58::encode(rsa_pair.public_key_to_der().unwrap()).into_string());
         Wallet {
             unexpend: vec![],
             total_credits: 0,
@@ -80,7 +79,7 @@ impl Wallet {
         for (index_in, in_uxto) in input_uxtos {
             let mut expend = false;
             for (_, out_uxto) in &ouput_uxtos {
-                if out_uxto.transaction.input_uxto_hash == in_uxto.uxto_hash {
+                if out_uxto.transaction.input_uxto_hash == in_uxto.uxto_hash() {
                     expend = true;
                     break;
                 }
@@ -90,7 +89,7 @@ impl Wallet {
                 self.total_credits += in_uxto.transaction.amount;
                 self.unexpend.push(UXTO {
                     block_id: index_in,
-                    hash: in_uxto.uxto_hash,
+                    hash: in_uxto.uxto_hash(),
                     amount: in_uxto.transaction.amount,
                 });
             }

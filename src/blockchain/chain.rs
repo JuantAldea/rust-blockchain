@@ -4,6 +4,7 @@ use openssl::rsa::{Padding, Rsa};
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(PartialEq, Debug)]
 pub enum BlockChainOperationResult {
@@ -12,7 +13,10 @@ pub enum BlockChainOperationResult {
     ProofOfWorkError,
     IndexMismatchError,
     DoubleExpendingError,
-    UXTOOwnershipError,
+    InTxNotFound,
+    InTxOwnershipError,
+    InTxTooSmallForTransaction,
+    InTxTooSmallForTransactionSet,
     SignatureError,
 }
 
@@ -79,11 +83,12 @@ impl BlockChain {
         BlockChainOperationResult::BlockChainOk
     }
 
-    pub fn validate_transaction_signature(signed_tx: &SignedTransaction) -> BlockChainOperationResult{
+    pub fn validate_transaction_signature(
+        signed_tx: &SignedTransaction,
+    ) -> BlockChainOperationResult {
         let sender = &signed_tx.transaction.sender;
         let transaction_hash = signed_tx.transaction.hash();
-        let transaction_signature_decoded =
-            bs58::decode(&signed_tx.signature).into_vec().unwrap();
+        let transaction_signature_decoded = bs58::decode(&signed_tx.signature).into_vec().unwrap();
 
         let decoded_key = bs58::decode(sender).into_vec().unwrap();
         let rsa_public = Rsa::public_key_from_der(&decoded_key).unwrap();
@@ -91,9 +96,10 @@ impl BlockChain {
         let _len = rsa_public
             .public_decrypt(&transaction_signature_decoded, &mut buf, Padding::PKCS1)
             .unwrap();
-        let decrypted_hash = String::from_utf8(buf).unwrap().to_string();
+        let decrypted_hash = String::from_utf8(buf).unwrap();
 
         if transaction_hash == decrypted_hash {
+            log::warn!("Invalid signature: FAIL");
             return BlockChainOperationResult::SignatureError;
         }
 
@@ -102,48 +108,74 @@ impl BlockChain {
 
     pub fn validate_block(&self, block: &Block) -> BlockChainOperationResult {
         log::debug!("================== Validating block ======================");
+        let mut input_hash = HashMap::new();
         for signed_tx in &block.transactions {
             log::debug!("Validating transaction");
             log::debug!("{}", signed_tx);
 
+            let tx = &signed_tx.transaction;
+            log::debug!("Source BLOCK {}", self.chain[tx.input_block_id as usize]);
+
+            let intx = self.chain[tx.input_block_id as usize]
+                .transactions
+                .iter()
+                .find(|source_tx| source_tx.uxto_hash() == tx.input_uxto_hash);
+
+            if intx.is_none() {
+                log::warn!("UXTO not found in source block: FAIL");
+                return BlockChainOperationResult::InTxNotFound;
+            }
+
+            let intx = intx.unwrap();
+
+            let funds_available = input_hash
+                .entry(&tx.input_uxto_hash)
+                .or_insert(intx.transaction.amount);
+
             let is_valid_transaction = BlockChain::validate_transaction_signature(signed_tx);
             if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
+                log::warn!("==================BLOCK IS INVALID======================");
                 return is_valid_transaction;
             }
 
             log::debug!("Signature is valid");
             log::debug!("Validating INPUTS");
 
-            let is_valid_transaction = self.validate_transaction_inputs(&signed_tx.transaction);
+            let is_valid_transaction = self.validate_transaction_inputs(&tx, &intx.transaction);
             if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
-                log::debug!("==================BLOCK IS INVALID======================");
+                log::warn!("==================BLOCK IS INVALID======================");
                 return is_valid_transaction;
             }
+
+            log::debug!("Transaction INPUTS. OK");
+
+            if funds_available.checked_sub(tx.amount).is_none() {
+                log::warn!("Remaining InTX funds ({}) are smaller that the transaction requested {}. (InTX < Sum(UXTOS))", *funds_available, tx.amount);
+                log::warn!("==================BLOCK IS INVALID======================");
+                return BlockChainOperationResult::InTxTooSmallForTransactionSet;
+            }
+
+            *funds_available -= tx.amount;
+            log::debug!("Transaction set InTX remaining funds:\n{:?}", input_hash);
         }
+
         log::debug!("==================BLOCK IS VALID======================");
         BlockChainOperationResult::BlockChainOk
     }
 
-    pub fn validate_transaction_inputs(&self, tx: &Transaction) -> BlockChainOperationResult {
+    pub fn validate_transaction_inputs(
+        &self,
+        tx: &Transaction,
+        intx: &Transaction,
+    ) -> BlockChainOperationResult {
         log::debug!("######### Validating transaction: #########");
         log::debug!("{}", tx);
         let source_block = &tx.input_block_id;
         let source_uxto = &tx.input_uxto_hash;
 
-        log::debug!("Source BLOCK {}", self.chain[*source_block as usize]);
-
-        let uxto_belongs_to_sender =
-            self.chain[*source_block as usize]
-                .transactions
-                .iter()
-                .any(|source_tx| {
-                    &source_tx.uxto_hash == source_uxto
-                        && source_tx.transaction.recipient == tx.sender
-                });
-
-        if !uxto_belongs_to_sender {
-            log::debug!("UXTO does not belong to sender: FAIL");
-            return BlockChainOperationResult::UXTOOwnershipError;
+        if intx.recipient != tx.sender {
+            log::warn!("UXTO does not belong to sender: FAIL");
+            return BlockChainOperationResult::InTxOwnershipError;
         }
 
         log::debug!("UXTO belongs to SENDER: OK.");
@@ -152,8 +184,8 @@ impl BlockChain {
             for signed_transaction in &block.transactions {
                 let transaction = &signed_transaction.transaction;
                 if &transaction.input_uxto_hash == source_uxto {
-                    log::debug!(
-                        "UXTO consumed in block {}. Double Expending detected.",
+                    log::warn!(
+                        "UXTO was consumed in block {}. Double Expending detected: FAIL",
                         block.index
                     );
                     return BlockChainOperationResult::DoubleExpendingError;
@@ -162,6 +194,18 @@ impl BlockChain {
         }
 
         log::debug!("UXTO is available. OK.");
+
+        if tx.amount > intx.amount {
+            log::warn!(
+                "Input UXTO is too small ({}) for the requested amount ({}). FAIL",
+                intx.amount,
+                tx.amount
+            );
+            return BlockChainOperationResult::InTxTooSmallForTransaction;
+        }
+
+        log::debug!("UXTO has enough funds. OK.");
+
         BlockChainOperationResult::BlockChainOk
     }
 
