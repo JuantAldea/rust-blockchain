@@ -47,7 +47,7 @@ impl Wallet {
     pub fn new() -> Self {
         let rsa_pair = Rsa::generate(1024).unwrap();
         let id = Id::new(&bs58::encode(rsa_pair.public_key_to_der().unwrap()).into_string());
-        Wallet {
+        Self {
             uxtos: vec![],
             total_credits: 0,
             rsa_pair,

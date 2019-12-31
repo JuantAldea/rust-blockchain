@@ -14,7 +14,7 @@ pub struct Block {
 
 impl Block {
     pub fn new(transactions: Vec<SignedTransaction>) -> Self {
-        Block {
+        Self {
             index: 0,
             previous_block: String::from("0").repeat(64),
             timestamp: SystemTime::now()
