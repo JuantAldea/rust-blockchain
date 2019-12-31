@@ -68,7 +68,7 @@ impl BlockChain {
             return BlockChainOperationResult::IndexMismatchError;
         }
 
-        if self.chain[index].previous_hash != self.chain[index - 1].hash() {
+        if self.chain[index].previous_block != self.chain[index - 1].hash() {
             return BlockChainOperationResult::HashMismatchError;
         }
 
@@ -202,7 +202,7 @@ impl BlockChain {
     }
 
     pub fn mine_block(&mut self, mut new_block: Block) {
-        new_block.previous_hash = match self.get_last_hash() {
+        new_block.previous_block = match self.get_last_hash() {
             Some(previous_hash) => previous_hash,
             None => "0".repeat(64),
         };

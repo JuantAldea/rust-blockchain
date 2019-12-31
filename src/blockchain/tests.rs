@@ -75,7 +75,7 @@ fn block_hash() {
 
     let block = Block {
         index: 1,
-        previous_hash: String::from("0").repeat(64),
+        previous_block: String::from("0").repeat(64),
         timestamp: 3,
         transactions: vec![signed_tx1, signed_tx2],
         nonce: 5,
