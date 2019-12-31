@@ -2,6 +2,7 @@ pub mod blockchain;
 
 use blockchain::block::*;
 use blockchain::chain::*;
+use blockchain::signedtransaction::*;
 use blockchain::transaction::*;
 use blockchain::wallet::*;
 use std::io::Write;
@@ -121,5 +122,4 @@ fn main() {
         println!("{}", chain);
         println!("==========================================================================");
     }
-
 }

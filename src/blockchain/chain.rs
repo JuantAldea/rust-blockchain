@@ -1,5 +1,8 @@
 use super::block::*;
+use super::hashable::*;
+use super::signedtransaction::*;
 use super::transaction::*;
+
 use openssl::rsa::{Padding, Rsa};
 use std::fmt;
 
@@ -111,7 +114,7 @@ impl BlockChain {
             let intx = self.chain[tx.input_block_id as usize]
                 .transactions
                 .iter()
-                .find(|source_tx| source_tx.uxto_hash() == tx.intx);
+                .find(|source_tx| source_tx.hash() == tx.intx);
 
             if intx.is_none() {
                 log::warn!("UXTO not found in source block: FAIL");
@@ -166,30 +169,31 @@ impl BlockChain {
         let source_uxto = &tx.intx;
 
         if intx.recipient != tx.sender {
-            log::warn!("UXTO does not belong to sender: FAIL");
+            log::warn!("TXOUT does not belong to sender: FAIL");
             return BlockChainOperationResult::InTxOwnershipError;
         }
 
-        log::debug!("UXTO belongs to SENDER: OK.");
+        log::debug!("TXOUT belongs to SENDER: OK.");
 
         for block in &self.chain[*source_block as usize..] {
-            for signed_transaction in &block.transactions {
-                let transaction = &signed_transaction.transaction;
-                if &transaction.intx == source_uxto {
-                    log::warn!(
-                        "UXTO was consumed in block {}. Double Expending detected: FAIL",
-                        block.index
-                    );
-                    return BlockChainOperationResult::DoubleExpendingError;
-                }
+            if block
+                .transactions
+                .iter()
+                .any(|stx| &stx.transaction.intx == source_uxto)
+            {
+                log::warn!(
+                    "TXOUT was consumed in block {}. Double Expending detected: FAIL",
+                    block.index
+                );
+                return BlockChainOperationResult::DoubleExpendingError;
             }
         }
 
-        log::debug!("UXTO is available. OK.");
+        log::debug!("TXOUT in an UXTO. OK.");
 
         if tx.amount > intx.amount {
             log::warn!(
-                "Input UXTO is too small ({}) for the requested amount ({}). FAIL",
+                "UXTO is too small ({}) for the requested amount ({}). FAIL",
                 intx.amount,
                 tx.amount
             );

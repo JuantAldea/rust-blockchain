@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::transaction::*;
-use serde::{Deserialize, Serialize};
+use super::hashable::*;
+use super::signedtransaction::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
@@ -32,9 +33,9 @@ impl Block {
         bytes.extend(self.previous_block.bytes());
         bytes.extend(&self.timestamp.to_be_bytes());
 
-        for transaction in &self.transactions {
-            bytes.extend(transaction.uxto_hash().bytes());
-        }
+        self.transactions
+            .iter()
+            .for_each(|tx| bytes.extend(tx.hash().bytes()));
 
         bytes.extend(&self.nonce.to_be_bytes());
         crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)

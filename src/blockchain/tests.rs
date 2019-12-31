@@ -1,6 +1,8 @@
 #[cfg(test)]
 use super::block::*;
 use super::chain::*;
+use super::hashable::*;
+use super::signedtransaction::*;
 use super::transaction::*;
 use super::wallet::*;
 
@@ -35,8 +37,8 @@ fn signed_transaction_hash() {
     let mut signed_tx1 = SignedTransaction::new(&tx1);
 
     signed_tx1.timestamp = 12345;
-    let uxto_hash = "93f4a980aa4aa27a46ea634c880b896edffc0fbb6514349ae4ee564b4e389da1";
-    assert_eq!(signed_tx1.uxto_hash(), uxto_hash);
+    let hash = "93f4a980aa4aa27a46ea634c880b896edffc0fbb6514349ae4ee564b4e389da1";
+    assert_eq!(signed_tx1.hash(), hash);
 }
 
 /*
@@ -105,7 +107,6 @@ fn double_spend() {
     let genesis_block = Block::new(vec![tx1_signed]);
     chain.mine_block(genesis_block);
 
-
     wallet1.read_wallet(&chain);
     let transactions = wallet1.create_transaction(&wallet1_id, tx1.amount).unwrap();
     // Trying to reuse INTX
@@ -151,7 +152,7 @@ fn try_to_expend_somebody_elses_uxtos() {
 
     let tx1_signed = wallet1.sign_transaction(&tx1);
     let tx2_signed = wallet2.sign_transaction(&tx2);
-    let tx2_uxto = tx2_signed.uxto_hash();
+    let tx2_uxto = tx2_signed.hash();
     let mut chain = BlockChain::new(2);
 
     let genesis_block = Block::new(vec![tx1_signed, tx2_signed]);
@@ -180,7 +181,7 @@ fn single_transaction_bigger_than_its_input() {
     );
 
     let tx1_signed = wallet1.sign_transaction(&tx1);
-    let tx1_uxto = tx1_signed.uxto_hash();
+    let tx1_uxto = tx1_signed.hash();
 
     let mut chain = BlockChain::new(2);
     let genesis_block = Block::new(vec![tx1_signed]);
@@ -209,7 +210,7 @@ fn transaction_set_bigger_than_its_input() {
     );
 
     let tx1_signed = wallet1.sign_transaction(&tx1);
-    let tx1_uxto = tx1_signed.uxto_hash();
+    let tx1_uxto = tx1_signed.hash();
 
     let mut chain = BlockChain::new(2);
     let genesis_block = Block::new(vec![tx1_signed]);
