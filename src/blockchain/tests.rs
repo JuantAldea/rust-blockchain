@@ -1,4 +1,3 @@
-#[cfg(test)]
 use super::block::*;
 use super::chain::*;
 use super::hashable::*;
