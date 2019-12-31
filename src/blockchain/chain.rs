@@ -27,9 +27,9 @@ pub struct BlockChain {
 }
 
 impl BlockChain {
-    pub fn new(difficulty: usize, transactions: Vec<SignedTransaction>) -> Self {
+    pub fn new(difficulty: usize) -> Self {
         BlockChain {
-            chain: vec![Block::new(transactions)],
+            chain: vec![],
             difficulty,
         }
     }
@@ -44,40 +44,32 @@ impl BlockChain {
         BlockChainOperationResult::BlockChainOk
     }
 
-    pub fn calculate_proof(block: &Block, proof: u128) -> String {
-        let mut bytes = vec![];
-        bytes.extend(block.hash().bytes());
-        bytes.extend(&block.proof.to_be_bytes());
-        bytes.extend(&proof.to_be_bytes());
-        crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
-    }
-
-    pub fn check_proof(&self, block: &Block, proof: u128) -> BlockChainOperationResult {
-        let proof_of_work = Self::calculate_proof(block, proof);
-        if proof_of_work[proof_of_work.len() - self.difficulty..] == "0".repeat(self.difficulty) {
-            BlockChainOperationResult::BlockChainOk
-        } else {
-            BlockChainOperationResult::ProofOfWorkError
+    pub fn check_proof(&self, block: &Block) -> BlockChainOperationResult {
+        let proof_of_work = block.hash();
+        log::trace!("Checking nonce: {} -> PoW: {}", block.nonce, proof_of_work);
+        if proof_of_work[..self.difficulty] != "0".repeat(self.difficulty) {
+            return BlockChainOperationResult::ProofOfWorkError;
         }
+
+        BlockChainOperationResult::BlockChainOk
     }
 
     pub fn check_block(&self, index: usize) -> BlockChainOperationResult {
+        if self.check_proof(&self.chain[index]) != BlockChainOperationResult::BlockChainOk {
+            return BlockChainOperationResult::ProofOfWorkError;
+        }
+
+        // The Genesis block has no parent, so no ascendance check can be perform.
         if index == 0 {
             return BlockChainOperationResult::BlockChainOk;
         }
 
+        if self.chain[index].index != self.chain[index - 1].index + 1 {
+            return BlockChainOperationResult::IndexMismatchError;
+        }
+
         if self.chain[index].previous_hash != self.chain[index - 1].hash() {
             return BlockChainOperationResult::HashMismatchError;
-        }
-
-        if self.check_proof(&self.chain[index - 1], self.chain[index].proof)
-            != BlockChainOperationResult::BlockChainOk
-        {
-            return BlockChainOperationResult::ProofOfWorkError;
-        }
-
-        if self.chain[index - 1].index != self.chain[index].index - 1 {
-            return BlockChainOperationResult::IndexMismatchError;
         }
 
         BlockChainOperationResult::BlockChainOk
@@ -119,7 +111,7 @@ impl BlockChain {
             let intx = self.chain[tx.input_block_id as usize]
                 .transactions
                 .iter()
-                .find(|source_tx| source_tx.uxto_hash() == tx.input_uxto_hash);
+                .find(|source_tx| source_tx.uxto_hash() == tx.intx);
 
             if intx.is_none() {
                 log::warn!("UXTO not found in source block: FAIL");
@@ -129,7 +121,7 @@ impl BlockChain {
             let intx = intx.unwrap();
 
             let funds_available = input_hash
-                .entry(&tx.input_uxto_hash)
+                .entry(&tx.intx)
                 .or_insert(intx.transaction.amount);
 
             let is_valid_transaction = BlockChain::validate_transaction_signature(signed_tx);
@@ -171,7 +163,7 @@ impl BlockChain {
         log::debug!("######### Validating transaction: #########");
         log::debug!("{}", tx);
         let source_block = &tx.input_block_id;
-        let source_uxto = &tx.input_uxto_hash;
+        let source_uxto = &tx.intx;
 
         if intx.recipient != tx.sender {
             log::warn!("UXTO does not belong to sender: FAIL");
@@ -183,7 +175,7 @@ impl BlockChain {
         for block in &self.chain[*source_block as usize..] {
             for signed_transaction in &block.transactions {
                 let transaction = &signed_transaction.transaction;
-                if &transaction.input_uxto_hash == source_uxto {
+                if &transaction.intx == source_uxto {
                     log::warn!(
                         "UXTO was consumed in block {}. Double Expending detected: FAIL",
                         block.index
@@ -209,49 +201,62 @@ impl BlockChain {
         BlockChainOperationResult::BlockChainOk
     }
 
-    pub fn add_block(&mut self, mut new_block: Block) {
-        let last_block = self.chain.last().unwrap();
-        new_block.previous_hash = self.get_last_hash();
-        new_block.index = self.get_last_index() + 1;
-        log::debug!("Mining for block:");
-        log::debug!("{}", new_block);
+    pub fn mine_block(&mut self, mut new_block: Block) {
+        new_block.previous_hash = match self.get_last_hash() {
+            Some(previous_hash) => previous_hash,
+            None => "0".repeat(64),
+        };
+
+        new_block.index = match self.get_last_index() {
+            Some(previous_index) => previous_index + 1,
+            None => 0,
+        };
+
+        log::debug!("Mining for block #{}:", &new_block.index);
+        log::debug!("{}", &new_block);
 
         loop {
-            if self.check_proof(last_block, new_block.proof)
-                == BlockChainOperationResult::BlockChainOk
-            {
+            if self.check_proof(&new_block) == BlockChainOperationResult::BlockChainOk {
                 break;
             }
-            new_block.proof += 1;
+            new_block.nonce += 1;
         }
 
-        log::debug!("Proof found: {:x}", new_block.proof);
+        log::debug!(
+            "Nonce found: {:x} => H[B] = {}",
+            new_block.nonce,
+            new_block.hash()
+        );
 
         self.chain.push(new_block);
     }
 
-    pub fn get_last_index(&self) -> u128 {
-        self.chain.last().unwrap().index
+    pub fn get_last_index(&self) -> Option<u128> {
+        if self.chain.is_empty() {
+            return None;
+        }
+
+        Some(self.chain.last().unwrap().index)
     }
 
-    pub fn get_last_hash(&self) -> String {
-        self.chain.last().unwrap().hash()
+    pub fn get_last_hash(&self) -> Option<String> {
+        if self.chain.is_empty() {
+            return None;
+        }
+
+        Some(self.chain.last().unwrap().hash())
     }
 }
 
 impl fmt::Display for BlockChain {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.chain.is_empty() {
+            return write!(f, "Empty chain");
+        }
+
         for i in 0..self.chain.len() - 1 {
             let current_block = &self.chain[i];
             writeln!(f, "Block: {}: {}", i, current_block)?;
-            let next_block = &self.chain[i + 1];
-            writeln!(
-                f,
-                "\nPOW[{}-{}]: {}\n",
-                i,
-                i + 1,
-                Self::calculate_proof(current_block, next_block.proof)
-            )?;
         }
 
         write!(

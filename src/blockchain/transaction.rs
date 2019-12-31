@@ -7,7 +7,7 @@ use super::id::*;
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct Transaction {
     pub input_block_id: u128,
-    pub input_uxto_hash: String,
+    pub intx: String,
     pub sender: String,
     pub recipient: String,
     pub amount: u128,
@@ -17,14 +17,14 @@ pub struct Transaction {
 impl Transaction {
     pub fn new(
         input_block_id: u128,
-        input_uxto_hash: &str,
+        intx: &str,
         sender: &str,
         recipient: &str,
         amount: u128,
     ) -> Self {
         Transaction {
             input_block_id,
-            input_uxto_hash: input_uxto_hash.to_string(),
+            intx: intx.to_string(),
             sender: sender.to_string(),
             recipient: recipient.to_string(),
             amount,
@@ -38,7 +38,7 @@ impl Transaction {
     pub fn hash(&self) -> String {
         let mut bytes = vec![];
         bytes.extend(&self.input_block_id.to_be_bytes());
-        bytes.extend(self.input_uxto_hash.bytes());
+        bytes.extend(self.intx.bytes());
         bytes.extend(self.sender.bytes());
         bytes.extend(self.recipient.bytes());
         bytes.extend(&self.amount.to_be_bytes());
@@ -53,7 +53,7 @@ impl fmt::Display for Transaction {
             f,
             "trans_time:{:x};in_uxto:{}...;s:{}...;r:{}...;a:{};in_id:{};",
             self.timestamp,
-            &self.input_uxto_hash[..10],
+            &self.intx[..10],
             Id::new(&self.sender),
             Id::new(&self.recipient),
             self.amount,

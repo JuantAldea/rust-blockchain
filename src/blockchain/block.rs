@@ -8,7 +8,7 @@ pub struct Block {
     pub index: u128,
     pub previous_hash: String,
     pub timestamp: u128,
-    pub proof: u128,
+    pub nonce: u128,
     pub transactions: Vec<SignedTransaction>,
 }
 
@@ -22,7 +22,7 @@ impl Block {
                 .unwrap()
                 .as_nanos(),
             transactions,
-            proof: 0,
+            nonce: 0,
         }
     }
 
@@ -36,23 +36,22 @@ impl Block {
             bytes.extend(transaction.uxto_hash().bytes());
         }
 
-        bytes.extend(&self.proof.to_be_bytes());
+        bytes.extend(&self.nonce.to_be_bytes());
         crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
     }
 }
 
 use std::fmt;
 impl fmt::Display for Block {
-    // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "index: {:}; timestamp: {:}; proof: {:x}; previous_hash: {:}...; current_hash: {:}...;",
+            "index: {:}; timestamp: {:}; hash: {:}...; proof: {:x}; previous_hash: {:}...;",
             self.index,
             self.timestamp,
-            self.proof,
+            &self.hash()[..10],
+            self.nonce,
             &self.previous_hash[..10],
-            &self.hash()[..10]
         )?;
 
         writeln!(f)?;

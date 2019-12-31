@@ -17,7 +17,7 @@ impl fmt::Display for UXTO {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "in_block: {}; uxto: {}; amount: {};",
+            "in_block: {}; UXTO: {}; amount: {};",
             self.block_id, self.hash, self.amount
         )
     }
@@ -37,7 +37,7 @@ pub enum WalletOperationResult {
 
 #[derive(Debug, Clone)]
 pub struct Wallet {
-    pub unexpend: Vec<UXTO>,
+    pub uxtos: Vec<UXTO>,
     pub total_credits: u128,
     pub rsa_pair: openssl::rsa::Rsa<openssl::pkey::Private>,
     pub id: Id,
@@ -48,7 +48,7 @@ impl Wallet {
         let rsa_pair = Rsa::generate(1024).unwrap();
         let id = Id::new(&bs58::encode(rsa_pair.public_key_to_der().unwrap()).into_string());
         Wallet {
-            unexpend: vec![],
+            uxtos: vec![],
             total_credits: 0,
             rsa_pair,
             id,
@@ -72,14 +72,14 @@ impl Wallet {
             }
         }
 
-        // gather our unexpended earnings
-        self.unexpend = vec![];
+        // gather UXTOs
+        self.uxtos = vec![];
         self.total_credits = 0;
 
         for (index_in, in_uxto) in input_uxtos {
             let mut expend = false;
             for (_, out_uxto) in &ouput_uxtos {
-                if out_uxto.transaction.input_uxto_hash == in_uxto.uxto_hash() {
+                if out_uxto.transaction.intx == in_uxto.uxto_hash() {
                     expend = true;
                     break;
                 }
@@ -87,7 +87,7 @@ impl Wallet {
 
             if !expend {
                 self.total_credits += in_uxto.transaction.amount;
-                self.unexpend.push(UXTO {
+                self.uxtos.push(UXTO {
                     block_id: index_in,
                     hash: in_uxto.uxto_hash(),
                     amount: in_uxto.transaction.amount,
@@ -97,7 +97,7 @@ impl Wallet {
     }
 
     pub fn create_transaction(
-        &self,
+        &mut self,
         recipient: &Id,
         amount: u128,
     ) -> Result<Vec<Transaction>, WalletOperationResult> {
@@ -105,35 +105,37 @@ impl Wallet {
             "##################### Creating transaction for {} coins #####################",
             amount
         );
-        let mut sum: u128 = 0;
-        let mut uxtos = vec![];
-        let mut uxtos_iter = self.unexpend.iter();
 
-        if sum > self.total_credits {
+        let mut sum: u128 = 0;
+        let mut intxs = vec![];
+
+        log::debug!("Gathering UXTOs:");
+        for uxto in self.uxtos.iter() {
+            if sum >= amount {
+                break;
+            }
+            log::debug!("\tAdding UXTO: {}", uxto);
+            intxs.push(uxto);
+            sum += uxto.amount;
+        }
+
+        if sum < amount {
             return Err(WalletOperationResult::NotEnoughtCoinsError);
         }
 
-        log::debug!("Gathering enough UXTOS:");
-        while sum < amount {
-            let uxto: &UXTO = uxtos_iter.next().unwrap();
-            uxtos.push(uxto);
-            sum += uxto.amount;
-            log::debug!("\tAdding uxto: {}", uxto);
-        }
-
-        log::debug!("Gathered UXTOS worth of {} coins", sum);
+        log::debug!("Gathered INTX worth of {} coins", sum);
 
         assert!(sum >= amount);
 
-        log::debug!("Preparing UXTOs transactions:");
+        log::debug!("Preparing transactions:");
         let mut transfers = vec![];
         let mut processed_transfer = 0;
-        for uxto in uxtos.iter() {
-            let fraction_to_transfer = cmp::min(amount - processed_transfer, uxto.amount);
+        for intx in intxs.iter() {
+            let fraction_to_transfer = cmp::min(amount - processed_transfer, intx.amount);
             processed_transfer += fraction_to_transfer;
             let transaction = Transaction::new(
-                uxto.block_id,
-                &uxto.hash,
+                intx.block_id,
+                &intx.hash,
                 &self.id.id,
                 &recipient.id,
                 fraction_to_transfer,
@@ -143,11 +145,11 @@ impl Wallet {
 
             transfers.push(transaction);
 
-            let fraction_to_send_back = uxto.amount - fraction_to_transfer;
+            let fraction_to_send_back = intx.amount - fraction_to_transfer;
             if fraction_to_send_back > 0 {
                 let transfer_difference = Transaction::new(
-                    uxto.block_id,
-                    &uxto.hash,
+                    intx.block_id,
+                    &intx.hash,
                     &self.id.id,
                     &self.id.id,
                     fraction_to_send_back,
@@ -156,6 +158,16 @@ impl Wallet {
                 log::debug!("\tTransfer back from UXTO: {}", transfer_difference);
                 transfers.push(transfer_difference);
             }
+        }
+
+        //remove used UXTOS from the wallet
+        for transfer in &transfers {
+            let used_uxto = &transfer.intx;
+            self.total_credits -= transfer.amount;
+            if let Some(index) = self.uxtos.iter().position(|u| *used_uxto == u.hash) {
+                self.uxtos.remove(index);
+
+            };
         }
 
         assert_eq!(amount, processed_transfer);
@@ -179,23 +191,25 @@ impl Wallet {
         stx
     }
 
-    pub fn sign_transactions(&self, transfers: Vec<Transaction>) -> Block {
-        let signed_transfers = transfers.iter().map(|tx| self.sign_transaction(tx));
-        Block::new(signed_transfers.collect())
+    pub fn sign_transactions(&self, transfers: Vec<Transaction>) -> Vec<SignedTransaction> {
+        transfers
+            .iter()
+            .map(|tx| self.sign_transaction(tx))
+            .collect()
     }
 }
 
 impl fmt::Display for Wallet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Wallet {}...", &self.id)?;
-        if self.unexpend.is_empty() {
+        if self.uxtos.is_empty() {
             return write!(f, "\tWallet is empty");
         }
 
-        for uxto in &self.unexpend[..self.unexpend.len() - 1] {
+        for uxto in &self.uxtos[..self.uxtos.len() - 1] {
             writeln!(f, "\t{}", uxto)?;
         }
 
-        write!(f, "\t{}", self.unexpend.last().unwrap())
+        write!(f, "\t{}", self.uxtos.last().unwrap())
     }
 }

@@ -1,5 +1,6 @@
 pub mod blockchain;
 
+use blockchain::block::*;
 use blockchain::chain::*;
 use blockchain::transaction::*;
 use blockchain::wallet::*;
@@ -17,7 +18,15 @@ fn main() {
     println!("{}", wallet2);
     println!("==========================================================================");
 
+    println!("========================== CREATING EMPTY CHAIN ==========================");
+    let mut chain = BlockChain::new(3);
+    println!("{}", chain);
+    println!("{:#?}", chain.check_chain());
+    println!("==========================================================================");
+
     println!("========================== CREATING GENESIS BLOCK ========================");
+
+    // Funds out of nowhere!
     let tx1 = Transaction::new(
         0,
         &String::from("0").repeat(64),
@@ -37,9 +46,10 @@ fn main() {
     let tx1_signed = wallet1.sign_transaction(&tx1);
     let tx2_signed = wallet2.sign_transaction(&tx2);
     let tx12_signed = wallet1.sign_transaction(&tx1);
+    let transactions = vec![tx1_signed, tx12_signed, tx2_signed];
+    let genesis_block = Block::new(transactions);
 
-    let mut chain = BlockChain::new(2, vec![tx1_signed, tx12_signed, tx2_signed]);
-
+    chain.mine_block(genesis_block);
     println!("{}", chain);
     println!("{:#?}", chain.check_chain());
     println!("==========================================================================");
@@ -54,15 +64,16 @@ fn main() {
     let transactions = wallet1.create_transaction(&wallet2.id, 7).unwrap();
 
     //println!("New Transactions: {:?}\n", transactions);
-    let block = wallet1.sign_transactions(transactions);
+    let block = Block::new(wallet1.sign_transactions(transactions));
     //println!("New block: {}\n", block);
 
     if chain.validate_block(&block) == BlockChainOperationResult::BlockChainOk {
-        chain.add_block(block);
+        chain.mine_block(block);
         println!("=========================== Chain Updated ================================");
         println!("{}", chain);
         println!("==========================================================================");
     }
+    println!("{:#?}", chain.check_chain());
 
     println!("=============================== WALLETS ==================================");
     wallet1.read_wallet(&chain);
@@ -75,11 +86,11 @@ fn main() {
     let transactions = wallet1.create_transaction(&wallet2.id, 2).unwrap();
 
     //println!("New Transactions: {:?}\n", transactions);
-    let block = wallet1.sign_transactions(transactions);
+    let block = Block::new(wallet1.sign_transactions(transactions));
     //println!("New block: {}\n", block);
 
     if chain.validate_block(&block) == BlockChainOperationResult::BlockChainOk {
-        chain.add_block(block);
+        chain.mine_block(block);
         println!("=========================== Chain Updated ================================");
         println!("{}", chain);
         println!("==========================================================================");
@@ -91,7 +102,7 @@ fn main() {
     println!("{}", wallet1);
     println!("{}", wallet2);
     println!("==========================================================================");
-/*
+
     let transactions: Vec<Transaction> = vec![
         wallet2.create_transaction(&wallet1.id, 20).unwrap(),
         wallet2.create_transaction(&wallet1.id, 5).unwrap(),
@@ -103,12 +114,12 @@ fn main() {
 
     println!("{}", TransactionsVec(transactions.clone()));
 
-    let block = wallet2.sign_transactions(transactions);
+    let block = Block::new(wallet2.sign_transactions(transactions));
     if chain.validate_block(&block) == BlockChainOperationResult::BlockChainOk {
-        chain.add_block(block);
+        chain.mine_block(block);
         println!("=========================== Chain Updated ================================");
         println!("{}", chain);
         println!("==========================================================================");
     }
-    */
+
 }
