@@ -287,7 +287,7 @@ impl BlockChain {
         };
 
         log::debug!(
-            "================== MINING BLOCK #{} ======================",
+            "================== Adding block #{} ======================",
             new_block.index
         );
 

@@ -31,60 +31,68 @@ fn main() {
     println!("========================== CREATING GENESIS BLOCK #0 =====================");
     println!("==========================================================================");
 
-    // Funds out of nowhere!
-    let tx1 = Transaction::new(
+    let tx = Transaction::new(
         0,
+        // Funds out of nowhere! -> 0...0 <=> coinbase transaction
         &String::from("0").repeat(64),
         &wallet1.id.id,
         &wallet1.id.id,
         20,
     );
 
-    let tx1_signed = wallet1.sign_transaction(&tx1);
+    let tx_signed = wallet1.sign_transaction(&tx);
+    let block = Block::new(vec![tx_signed]);
 
-    let genesis_block = Block::new(vec![tx1_signed]);
+    let mine_result = chain.mine_block(block);
+    assert_eq!(mine_result, BlockChainOperationResult::BlockChainOk);
 
-    chain.mine_block(genesis_block);
+    let chain_check = chain.check_chain();
+    assert_eq!(chain_check, BlockChainOperationResult::BlockChainOk);
 
-    println!("============================== CHAIN =====================================");
+
+    println!("=========================== Chain Updated ================================");
     println!("{}", chain);
-    println!("{:#?}", chain.check_chain());
     println!("==========================================================================");
-    assert_eq!(chain.check_chain(), BlockChainOperationResult::BlockChainOk);
-
-    println!("==========================================================================");
-    println!("========================== BLOCK #1 ======================================");
-    println!("==========================================================================");
-
-    let tx2 = Transaction::new(
-        0,
-        &String::from("0").repeat(64),
-        &wallet2.id.id,
-        &wallet2.id.id,
-        20,
-    );
-
-    let tx2_signed = wallet2.sign_transaction(&tx2);
-    //let tx12_signed = wallet1.sign_transaction(&tx1);
-    //let transactions = vec![tx1_signed, tx12_signed, tx2_signed];
-    let block = Block::new(vec![tx2_signed]);
-
-    chain.mine_block(block);
-    println!("============================== CHAIN =====================================");
-    println!("{}", chain);
-    println!("{:#?}", chain.check_chain());
-    println!("==========================================================================");
-    assert_eq!(chain.check_chain(), BlockChainOperationResult::BlockChainOk);
-
-    println!("==========================================================================");
-    println!("========================== BLOCK #2 ======================================");
-    println!("==========================================================================");
-
     println!("=============================== WALLETS ==================================");
     wallet1.read_wallet(&chain);
     wallet2.read_wallet(&chain);
     println!("{}", wallet1);
     println!("{}", wallet2);
+    println!("==========================================================================");
+
+    println!("==========================================================================");
+    println!("========================== BLOCK #1 ======================================");
+    println!("==========================================================================");
+
+    let tx = Transaction::new(
+        0,
+        &String::from("0").repeat(64),
+        &wallet2.id.id,
+        &wallet2.id.id,
+        20,
+    );
+
+    let tx_signed = wallet2.sign_transaction(&tx);
+    let block = Block::new(vec![tx_signed]);
+
+    let mine_result = chain.mine_block(block);
+    assert_eq!(mine_result, BlockChainOperationResult::BlockChainOk);
+
+    let chain_check = chain.check_chain();
+    assert_eq!(chain_check, BlockChainOperationResult::BlockChainOk);
+
+    println!("=========================== Chain Updated ================================");
+    println!("{}", chain);
+    println!("==========================================================================");
+    println!("=============================== WALLETS ==================================");
+    wallet1.read_wallet(&chain);
+    wallet2.read_wallet(&chain);
+    println!("{}", wallet1);
+    println!("{}", wallet2);
+    println!("==========================================================================");
+
+    println!("==========================================================================");
+    println!("========================== BLOCK #2 ======================================");
     println!("==========================================================================");
 
     let transactions = wallet1.create_transaction(&wallet2.id, 7).unwrap();
@@ -106,6 +114,10 @@ fn main() {
     println!("{}", wallet2);
     println!("==========================================================================");
 
+    println!("==========================================================================");
+    println!("========================== BLOCK #3 ======================================");
+    println!("==========================================================================");
+
     let transactions = wallet1.create_transaction(&wallet2.id, 2).unwrap();
     let block = Block::new(wallet1.sign_transactions(transactions));
 
@@ -123,6 +135,10 @@ fn main() {
     wallet2.read_wallet(&chain);
     println!("{}", wallet1);
     println!("{}", wallet2);
+    println!("==========================================================================");
+
+    println!("==========================================================================");
+    println!("========================== BLOCK #4 ======================================");
     println!("==========================================================================");
 
     let transactions: Vec<Transaction> = vec![
