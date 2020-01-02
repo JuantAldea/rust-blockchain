@@ -1,9 +1,9 @@
 use super::block::*;
 use super::chain::*;
-use super::hashable::*;
 use super::signedtransaction::*;
 use super::transaction::*;
 use super::wallet::*;
+use super::*;
 
 #[test]
 fn transaction_hash() {
@@ -33,10 +33,8 @@ fn signed_transaction_hash() {
 
     tx1.timestamp = 1234;
     // no need for a valid signature here
-    let mut signed_tx1 = SignedTransaction::new(&tx1);
-
-    signed_tx1.timestamp = 12345;
-    let hash = "93f4a980aa4aa27a46ea634c880b896edffc0fbb6514349ae4ee564b4e389da1";
+    let signed_tx1 = SignedTransaction::new(tx1, String::from("0").repeat(64));
+    let hash = "f59f9fd7af66717f94285cf0b3a7343986f29e1cf46b15b051dd1df65a991233";
     assert_eq!(signed_tx1.hash(), hash);
 }
 
@@ -68,11 +66,8 @@ fn block_hash() {
     tx1.timestamp = 11111;
     tx2.timestamp = 22222;
 
-    let mut signed_tx1 = SignedTransaction::new(&tx1);
-    let mut signed_tx2 = SignedTransaction::new(&tx2);
-
-    signed_tx1.timestamp = 33333;
-    signed_tx2.timestamp = 44444;
+    let signed_tx1 = SignedTransaction::new(tx1, String::from("0").repeat(64));
+    let signed_tx2 = SignedTransaction::new(tx2, String::from("0").repeat(64));
 
     let block = Block {
         index: 1,
@@ -82,7 +77,7 @@ fn block_hash() {
         nonce: 5,
     };
 
-    let block_hash = "73697be7963093a59f9dea1d3b2fd921404eefc660a2ef261ffa367548366b7c";
+    let block_hash = "249679bb6b4e1fe31add1e4d7e196a8676000911b0089582008e5aaa0a3f4e9c";
     assert_eq!(block.hash(), block_hash);
 }
 
@@ -108,28 +103,29 @@ fn double_spend() {
 
     wallet1.read_wallet(&chain);
     let transactions = wallet1.create_transaction(&wallet1_id, tx1.amount).unwrap();
-    // Trying to reuse INTX
+
+    // clone txs to reuse INTX
     let reused_transactions = transactions.clone();
     let signed_transactions = wallet1.sign_transactions(transactions);
     let new_block = Block::new(signed_transactions);
 
     assert_eq!(
-        chain.validate_block(&new_block),
+        chain.mine_block(new_block),
         BlockChainOperationResult::BlockChainOk
     );
 
-    chain.mine_block(new_block);
-    //
     let bogus_block = Block::new(wallet1.sign_transactions(reused_transactions));
-    // leading to a DoubleExpend error
-    assert_eq!(
-        chain.validate_block(&bogus_block),
-        BlockChainOperationResult::DoubleExpendingError
-    );
+
+    // leading to a DoubleSpend error
+    println!("################################################################################################################################");
+    println!("{}", chain);
+    println!("################################################################################################################################");
+    let err = chain.mine_block(bogus_block);
+    assert_eq!(err, BlockChainOperationResult::DoubleSpendingError);
 }
 
 #[test]
-fn try_to_expend_somebody_elses_uxtos() {
+fn spend_somebody_elses_uxtos() {
     let wallet1 = Wallet::new();
     let wallet2 = Wallet::new();
 
@@ -162,7 +158,7 @@ fn try_to_expend_somebody_elses_uxtos() {
 
     let bogus_block = Block::new(wallet1.sign_transactions(vec![bogus_tx]));
     assert_eq!(
-        chain.validate_block(&bogus_block),
+        chain.validate_block_transactions(&bogus_block),
         BlockChainOperationResult::InTxOwnershipError
     );
 }
@@ -191,7 +187,7 @@ fn single_transaction_bigger_than_its_input() {
 
     let bogus_block = Block::new(wallet1.sign_transactions(vec![bogus_tx]));
     assert_eq!(
-        chain.validate_block(&bogus_block),
+        chain.validate_block_transactions(&bogus_block),
         BlockChainOperationResult::InTxTooSmallForTransaction
     );
 }
@@ -223,7 +219,7 @@ fn transaction_set_bigger_than_its_input() {
 
     let bogus_block = Block::new(wallet1.sign_transactions(vec![bogus_tx1, bogus_tx2]));
     assert_eq!(
-        chain.validate_block(&bogus_block),
+        chain.validate_block_transactions(&bogus_block),
         BlockChainOperationResult::InTxTooSmallForTransactionSet
     );
 }

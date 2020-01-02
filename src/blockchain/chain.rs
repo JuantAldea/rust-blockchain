@@ -1,7 +1,7 @@
 use super::block::*;
-use super::hashable::*;
 use super::signedtransaction::*;
 use super::transaction::*;
+use super::*;
 
 use openssl::rsa::{Padding, Rsa};
 use std::fmt;
@@ -15,12 +15,13 @@ pub enum BlockChainOperationResult {
     HashMismatchError,
     ProofOfWorkError,
     IndexMismatchError,
-    DoubleExpendingError,
-    InTxNotFound,
+    DoubleSpendingError,
+    TxIdNotFound,
     InTxOwnershipError,
     InTxTooSmallForTransaction,
     InTxTooSmallForTransactionSet,
     SignatureError,
+    SourceBlockIsNewerError,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -38,8 +39,8 @@ impl BlockChain {
     }
 
     pub fn check_chain(&self) -> BlockChainOperationResult {
-        for i in 0..self.chain.len() {
-            let error = self.check_block(i);
+        for block in self.chain.iter() {
+            let error = self.check_block(block);
             if error != BlockChainOperationResult::BlockChainOk {
                 return error;
             }
@@ -57,24 +58,145 @@ impl BlockChain {
         BlockChainOperationResult::BlockChainOk
     }
 
-    pub fn check_block(&self, index: usize) -> BlockChainOperationResult {
-        if self.check_proof(&self.chain[index]) != BlockChainOperationResult::BlockChainOk {
+    pub fn check_block(&self, block: &Block) -> BlockChainOperationResult {
+        if self.check_proof(block) != BlockChainOperationResult::BlockChainOk {
             return BlockChainOperationResult::ProofOfWorkError;
         }
 
+        let block_txs_valid = self.validate_block_transactions(&block);
+        if block_txs_valid != BlockChainOperationResult::BlockChainOk {
+            return block_txs_valid;
+        }
+
         // The Genesis block has no parent, so no ascendance check can be perform.
-        if index == 0 {
+        if block.index == 0 {
             return BlockChainOperationResult::BlockChainOk;
         }
 
-        if self.chain[index].index != self.chain[index - 1].index + 1 {
+        // TODO block index as usize??
+        let previous_block = &self.chain[block.index as usize - 1];
+
+        if block.index != previous_block.index + 1 {
             return BlockChainOperationResult::IndexMismatchError;
         }
 
-        if self.chain[index].previous_block != self.chain[index - 1].hash() {
+        if block.previous_block != previous_block.hash() {
             return BlockChainOperationResult::HashMismatchError;
         }
 
+        BlockChainOperationResult::BlockChainOk
+    }
+
+    /*
+    pub fn validate_block_tx(
+        &self,
+        tx_block: &Block,
+        tx_index: usize,
+    ) -> BlockChainOperationResult {
+        let tx = &tx_block.transactions[tx_index];
+
+        if tx.transaction.input_block_id > tx_block.index {
+            return BlockChainOperationResult::SourceBlockIsNewerError;
+        }
+
+        let was_output_of = |intx: &String, tx: &SignedTransaction| *intx == tx.hash();
+        let source_blocks = self.chain.iter().filter(|block| { block.find_tx(&tx.transaction.intx, was_output_of).is_some() });
+        if source_blocks.len() != 1 {}
+
+        let source_block = &self.chain[tx.transaction.input_block_id as usize];
+
+        let source_tx = source_block.find_tx(&tx.transaction.intx, &is_input);
+        let source_tx = match source_tx {
+            Some(stx) => stx,
+            _ => return BlockChainOperationResult::TxIdNotFound,
+        };
+
+        if tx.transaction.sender != source_tx.transaction.recipient {
+            return BlockChainOperationResult::InTxOwnershipError;
+        }
+
+        let is_valid_transaction = BlockChain::validate_transaction_signature(tx);
+        if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
+            return is_valid_transaction;
+        }
+
+        BlockChainOperationResult::BlockChainOk
+    }
+    */
+
+    pub fn find_txid_in_block(
+        &self,
+        txid: &str,
+        index: usize,
+    ) -> Result<&SignedTransaction, BlockChainOperationResult> {
+        let result = self.chain[index]
+            .transactions
+            .iter()
+            .find(|source_tx| txid == source_tx.hash());
+        result.ok_or(BlockChainOperationResult::TxIdNotFound)
+    }
+
+    pub fn validate_block_transactions(&self, block: &Block) -> BlockChainOperationResult {
+        log::debug!("================== Validating block ======================");
+        let transactions = &block.transactions;
+        let mut input_hash = HashMap::new();
+        for (tx_index, signed_tx) in transactions.iter().enumerate() {
+            log::debug!("Validating transaction");
+            log::debug!("{}", signed_tx);
+
+            let tx = &signed_tx.transaction;
+            if tx.intx == String::from("0").repeat(64) {
+                //This is a coinbase transaction
+                log::debug!("Coinbase Transaction. No input check needed.");
+                return BlockChainOperationResult::BlockChainOk;
+            }
+
+            log::debug!("Source BLOCK {}", self.chain[tx.input_block_id as usize]);
+
+            let intx = self.chain[tx.input_block_id as usize]
+                .transactions
+                .iter()
+                .find(|source_tx| source_tx.hash() == tx.intx);
+
+            if intx.is_none() {
+                log::warn!("Input TXID not found in source block: FAIL");
+                return BlockChainOperationResult::TxIdNotFound;
+            }
+
+            let intx = intx.unwrap();
+
+            let is_valid_transaction = BlockChain::validate_transaction_signature(signed_tx);
+            if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
+                log::warn!("==================BLOCK IS INVALID======================");
+                return is_valid_transaction;
+            }
+
+            log::debug!("Signature is valid");
+            log::debug!("Validating INPUTS");
+
+            let is_valid_transaction =
+                self.validate_transaction_inputs(block, tx_index, &intx.transaction);
+            if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
+                log::warn!("==================BLOCK IS INVALID======================");
+                return is_valid_transaction;
+            }
+
+            log::debug!("Transaction INPUTS. OK");
+
+            let funds_available = input_hash
+                .entry(&tx.intx)
+                .or_insert(intx.transaction.amount);
+            if funds_available.checked_sub(tx.amount).is_none() {
+                log::warn!("Remaining INTX funds ({}) are smaller that the transaction requested {}. (INTX < Sum(UXTOS))", *funds_available, tx.amount);
+                log::warn!("==================BLOCK IS INVALID======================");
+                return BlockChainOperationResult::InTxTooSmallForTransactionSet;
+            }
+
+            *funds_available -= tx.amount;
+            log::debug!("Transaction set INTX remaining funds:\n{:?}", input_hash);
+        }
+
+        log::debug!("==================BLOCK IS VALID======================");
         BlockChainOperationResult::BlockChainOk
     }
 
@@ -101,72 +223,18 @@ impl BlockChain {
         BlockChainOperationResult::BlockChainOk
     }
 
-    pub fn validate_block(&self, block: &Block) -> BlockChainOperationResult {
-        log::debug!("================== Validating block ======================");
-        let mut input_hash = HashMap::new();
-        for signed_tx in &block.transactions {
-            log::debug!("Validating transaction");
-            log::debug!("{}", signed_tx);
-
-            let tx = &signed_tx.transaction;
-            log::debug!("Source BLOCK {}", self.chain[tx.input_block_id as usize]);
-
-            let intx = self.chain[tx.input_block_id as usize]
-                .transactions
-                .iter()
-                .find(|source_tx| source_tx.hash() == tx.intx);
-
-            if intx.is_none() {
-                log::warn!("UXTO not found in source block: FAIL");
-                return BlockChainOperationResult::InTxNotFound;
-            }
-
-            let intx = intx.unwrap();
-
-            let funds_available = input_hash
-                .entry(&tx.intx)
-                .or_insert(intx.transaction.amount);
-
-            let is_valid_transaction = BlockChain::validate_transaction_signature(signed_tx);
-            if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
-                log::warn!("==================BLOCK IS INVALID======================");
-                return is_valid_transaction;
-            }
-
-            log::debug!("Signature is valid");
-            log::debug!("Validating INPUTS");
-
-            let is_valid_transaction = self.validate_transaction_inputs(&tx, &intx.transaction);
-            if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
-                log::warn!("==================BLOCK IS INVALID======================");
-                return is_valid_transaction;
-            }
-
-            log::debug!("Transaction INPUTS. OK");
-
-            if funds_available.checked_sub(tx.amount).is_none() {
-                log::warn!("Remaining InTX funds ({}) are smaller that the transaction requested {}. (InTX < Sum(UXTOS))", *funds_available, tx.amount);
-                log::warn!("==================BLOCK IS INVALID======================");
-                return BlockChainOperationResult::InTxTooSmallForTransactionSet;
-            }
-
-            *funds_available -= tx.amount;
-            log::debug!("Transaction set InTX remaining funds:\n{:?}", input_hash);
-        }
-
-        log::debug!("==================BLOCK IS VALID======================");
-        BlockChainOperationResult::BlockChainOk
-    }
-
     pub fn validate_transaction_inputs(
         &self,
-        tx: &Transaction,
+        //tx: &Transaction,
+        tx_block: &Block,
+        tx_index: usize,
         intx: &Transaction,
     ) -> BlockChainOperationResult {
+        let tx = &tx_block.transactions[tx_index].transaction;
         log::debug!("######### Validating transaction: #########");
         log::debug!("{}", tx);
         let source_block = &tx.input_block_id;
-        let source_uxto = &tx.intx;
+        let source_txid = &tx.intx;
 
         if intx.recipient != tx.sender {
             log::warn!("TXOUT does not belong to sender: FAIL");
@@ -176,24 +244,26 @@ impl BlockChain {
         log::debug!("TXOUT belongs to SENDER: OK.");
 
         for block in &self.chain[*source_block as usize..] {
-            if block
-                .transactions
-                .iter()
-                .any(|stx| &stx.transaction.intx == source_uxto)
-            {
+            let already_used = block.transactions.iter().find(|stx| {
+                let tx = &stx.transaction;
+                &tx.intx == source_txid && tx_block.index != block.index
+            });
+
+            if let Some(previous_tx) = already_used {
                 log::warn!(
-                    "TXOUT was consumed in block {}. Double Expending detected: FAIL",
-                    block.index
+                    "Double-spending detected: TXID was consumed in block {} by TX: {}. FAIL",
+                    block.index,
+                    previous_tx,
                 );
-                return BlockChainOperationResult::DoubleExpendingError;
+                return BlockChainOperationResult::DoubleSpendingError;
             }
         }
 
-        log::debug!("TXOUT in an UXTO. OK.");
+        log::debug!("TXOUT is an UXTO. OK.");
 
         if tx.amount > intx.amount {
             log::warn!(
-                "UXTO is too small ({}) for the requested amount ({}). FAIL",
+                "UXTO is too small ({}) for the amount requested ({}). FAIL",
                 intx.amount,
                 tx.amount
             );
@@ -205,7 +275,7 @@ impl BlockChain {
         BlockChainOperationResult::BlockChainOk
     }
 
-    pub fn mine_block(&mut self, mut new_block: Block) {
+    pub fn mine_block(&mut self, mut new_block: Block) -> BlockChainOperationResult {
         new_block.previous_block = match self.get_last_hash() {
             Some(previous_hash) => previous_hash,
             None => "0".repeat(64),
@@ -215,6 +285,17 @@ impl BlockChain {
             Some(previous_index) => previous_index + 1,
             None => 0,
         };
+
+        log::debug!(
+            "================== MINING BLOCK #{} ======================",
+            new_block.index
+        );
+
+        let is_valid = self.validate_block_transactions(&new_block);
+
+        if is_valid != BlockChainOperationResult::BlockChainOk {
+            return is_valid;
+        }
 
         log::debug!("Mining for block #{}:", &new_block.index);
         log::debug!("{}", &new_block);
@@ -232,7 +313,16 @@ impl BlockChain {
             new_block.hash()
         );
 
+        // necessary?
+        let is_valid = self.check_block(&new_block);
+
+        if is_valid != BlockChainOperationResult::BlockChainOk {
+            return is_valid;
+        }
+
         self.chain.push(new_block);
+
+        BlockChainOperationResult::BlockChainOk
     }
 
     pub fn get_last_index(&self) -> Option<u128> {

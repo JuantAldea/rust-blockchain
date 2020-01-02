@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::hashable::*;
 use super::signedtransaction::*;
+use super::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
@@ -40,6 +40,18 @@ impl Block {
         bytes.extend(&self.nonce.to_be_bytes());
         crypto_hash::hex_digest(crypto_hash::Algorithm::SHA256, &bytes)
     }
+
+    pub fn find_tx<P, T>(&self, value: &T, predicate: P) -> Option<&SignedTransaction>
+    where
+        P: Fn(&T, &SignedTransaction) -> bool,
+    {
+        for tx in self.transactions.iter() {
+            if predicate(value, tx) {
+                return Some(tx);
+            }
+        }
+        None
+    }
 }
 
 use std::fmt;
@@ -47,7 +59,7 @@ impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "index: {:}; timestamp: {:}; hash: {:}...; proof: {:x}; previous_block: {:}...;",
+            "index:{};timestamp:{};hash:{}...;nonce:{:x};previous_block:{:}...;",
             self.index,
             self.timestamp,
             &self.hash()[..10],
@@ -61,7 +73,7 @@ impl fmt::Display for Block {
             writeln!(f, "\t{}: {} ", i, self.transactions[i]).unwrap();
         }
 
-        write!(
+        writeln!(
             f,
             "\t{}: {} ",
             self.transactions.len() - 1,

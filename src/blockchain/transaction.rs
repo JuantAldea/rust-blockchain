@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::hashable::*;
 use super::id::*;
+use super::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct Transaction {
@@ -23,7 +23,7 @@ impl Transaction {
         recipient: &str,
         amount: u128,
     ) -> Self {
-        Transaction {
+        Self {
             input_block_id,
             intx: intx.to_string(),
             sender: sender.to_string(),
@@ -62,5 +62,16 @@ impl fmt::Display for Transaction {
             Id::new(&self.recipient),
             self.amount,
         )
+    }
+}
+
+pub struct TransactionsVec(pub Vec<Transaction>);
+
+impl fmt::Display for TransactionsVec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for i in 0..self.0.len() {
+            writeln!(f, "{}: {}", i, self.0[i]).unwrap();
+        }
+        Ok(())
     }
 }

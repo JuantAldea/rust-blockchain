@@ -1,8 +1,8 @@
 use super::chain::*;
-use super::hashable::*;
 use super::id::*;
 use super::signedtransaction::*;
 use super::transaction::*;
+use super::*;
 
 use openssl::rsa::{Padding, Rsa};
 use std::cmp;
@@ -58,74 +58,51 @@ impl Wallet {
     }
 
     pub fn read_wallet(&mut self, chain: &BlockChain) {
-        let mut input_uxtos = vec![];
-        let mut ouput_uxtos = vec![];
-        for block in &chain.chain {
-            for transaction in &block.transactions {
-                // Gather our earnings
-                if transaction.transaction.recipient == self.id.id {
-                    input_uxtos.push((block.index, transaction.clone()));
-                }
+        let is_sender_of_tx = |id: &Id, tx: &SignedTransaction| id.id == tx.transaction.sender;
 
-                // Gather our expenses
-                if transaction.transaction.sender == self.id.id {
-                    ouput_uxtos.push((block.index, transaction.clone()));
-                }
-            }
-        }
+        let is_recipient_of_tx =
+            |id: &Id, tx: &SignedTransaction| id.id == tx.transaction.recipient;
 
-        // gather UXTOs
-        self.uxtos = vec![];
-        self.total_credits = 0;
-        /*
-        for (index_in, in_uxto) in input_uxtos {
-            let expent = ouput_uxtos
+        let filter_txs_in_chain = |chain: &BlockChain,
+                                   predicate: fn(&Id, &SignedTransaction) -> bool|
+         -> Vec<(u128, SignedTransaction)> {
+            chain
+                .chain
                 .iter()
-                .any(|(_, out_uxto)| out_uxto.transaction.intx == in_uxto.uxto_hash());
+                .flat_map(|block| {
+                    block
+                        .transactions
+                        .iter()
+                        .filter_map(|tx| {
+                            if predicate(&self.id, tx) {
+                                Some((block.index, tx.clone()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<(u128, SignedTransaction)>>()
+                })
+                .collect()
+        };
 
-            if expent {
-                continue
-            }
+        let received_txs = filter_txs_in_chain(chain, is_recipient_of_tx);
+        let spent_txs = filter_txs_in_chain(chain, is_sender_of_tx);
 
-            self.total_credits += in_uxto.transaction.amount;
-            self.uxtos.push(UXTO {
-                block_id: index_in,
-                hash: in_uxto.uxto_hash(),
-                amount: in_uxto.transaction.amount,
-            });
-        }
-        */
-
-        /*
-        let uxtos = input_uxtos.iter().filter(|(_, in_tx)| {
-            ouput_uxtos
-                .iter()
-                .all(|(_, out_uxto)| out_uxto.transaction.intx != in_tx.uxto_hash())
-        });
-
-        self.uxtos = uxtos
-            .map(|(index, uxto)| UXTO {
-                block_id: *index,
-                hash: uxto.uxto_hash(),
-                amount: uxto.transaction.amount,
-            })
-            .collect();
-        */
-
-        self.uxtos = input_uxtos
+        // gather UXTOs => {recived - spent}
+        self.uxtos = received_txs
             .iter()
             .filter_map(|(index, in_tx)| {
-                let expent = ouput_uxtos
+                let is_uxto = spent_txs
                     .iter()
                     .any(|(_, out_uxto)| out_uxto.transaction.intx == in_tx.hash());
-                if expent {
-                    None
-                } else {
+                if !is_uxto {
                     Some(UXTO {
                         block_id: *index,
                         hash: in_tx.hash(),
                         amount: in_tx.transaction.amount,
                     })
+                } else {
+                    None
                 }
             })
             .collect();
@@ -161,7 +138,7 @@ impl Wallet {
             return Err(WalletOperationResult::NotEnoughtCoinsError);
         }
 
-        log::debug!("Gathered INTX worth of {} coins", sum);
+        log::debug!("Gathered INTXs worth of {} coins", sum);
 
         assert!(sum >= amount);
 
@@ -203,7 +180,7 @@ impl Wallet {
         //remove used UXTOS from the wallet
         for transfer in &transfers {
             let used_uxto = &transfer.intx;
-            self.total_credits -= transfer.amount;
+            self.total_credits = self.total_credits.saturating_sub(transfer.amount);
             if let Some(index) = self.uxtos.iter().position(|u| *used_uxto == u.hash) {
                 self.uxtos.remove(index);
             }
@@ -215,19 +192,13 @@ impl Wallet {
     }
 
     pub fn sign_transaction(&self, tx: &Transaction) -> SignedTransaction {
-        let mut stx = SignedTransaction::new(tx);
         let mut signature = vec![0; self.rsa_pair.size() as usize];
-
         let _ = self
             .rsa_pair
-            .private_encrypt(
-                stx.hash_for_signature().as_bytes(),
-                &mut signature,
-                Padding::PKCS1,
-            )
+            .private_encrypt(tx.hash().as_bytes(), &mut signature, Padding::PKCS1)
             .unwrap();
-        stx.signature = bs58::encode(signature).into_string();
-        stx
+
+        SignedTransaction::new(tx.clone(), bs58::encode(signature).into_string())
     }
 
     pub fn sign_transactions(&self, transfers: Vec<Transaction>) -> Vec<SignedTransaction> {
