@@ -89,6 +89,15 @@ impl BlockChain {
         BlockChainOperationResult::BlockChainOk
     }
 
+    pub fn consensus(&mut self, another: BlockChain) -> BlockChainOperationResult{
+        if self.chain.len() < another.chain.len() && another.check_chain() == BlockChainOperationResult::BlockChainOk {
+            self.chain = another.chain;
+            return BlockChainOperationResult::BlockChainUpdated;
+        }
+
+        BlockChainOperationResult::BlockChainKept
+    }
+
     /*
     pub fn validate_block_tx(
         &self,
