@@ -12,6 +12,8 @@ use std::collections::HashMap;
 #[derive(PartialEq, Debug)]
 pub enum BlockChainOperationResult {
     BlockChainOk,
+    BlockChainUpdated,
+    BlockChainKept,
     HashMismatchError,
     ProofOfWorkError,
     IndexMismatchError,
@@ -63,9 +65,9 @@ impl BlockChain {
             return BlockChainOperationResult::ProofOfWorkError;
         }
 
-        let block_txs_valid = self.validate_block_transactions(&block);
-        if block_txs_valid != BlockChainOperationResult::BlockChainOk {
-            return block_txs_valid;
+        let block_txs_state = self.validate_block_transactions(&block);
+        if block_txs_state != BlockChainOperationResult::BlockChainOk {
+            return block_txs_state;
         }
 
         // The Genesis block has no parent, so no ascendance check can be perform.
@@ -126,14 +128,13 @@ impl BlockChain {
 
     pub fn find_txid_in_block(
         &self,
+        index: u128,
         txid: &str,
-        index: usize,
-    ) -> Result<&SignedTransaction, BlockChainOperationResult> {
-        let result = self.chain[index]
+    ) -> Option<&SignedTransaction> {
+        self.chain[index as usize]
             .transactions
             .iter()
-            .find(|source_tx| txid == source_tx.hash());
-        result.ok_or(BlockChainOperationResult::TxIdNotFound)
+            .find(|source_tx| txid == source_tx.hash())
     }
 
     pub fn validate_block_transactions(&self, block: &Block) -> BlockChainOperationResult {
@@ -153,10 +154,7 @@ impl BlockChain {
 
             log::debug!("Source BLOCK {}", self.chain[tx.input_block_id as usize]);
 
-            let intx = self.chain[tx.input_block_id as usize]
-                .transactions
-                .iter()
-                .find(|source_tx| source_tx.hash() == tx.intx);
+            let intx = self.find_txid_in_block(tx.input_block_id, &tx.intx);
 
             if intx.is_none() {
                 log::warn!("Input TXID not found in source block: FAIL");
@@ -176,6 +174,7 @@ impl BlockChain {
 
             let is_valid_transaction =
                 self.validate_transaction_inputs(block, tx_index, &intx.transaction);
+
             if is_valid_transaction != BlockChainOperationResult::BlockChainOk {
                 log::warn!("==================BLOCK IS INVALID======================");
                 return is_valid_transaction;
