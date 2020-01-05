@@ -3,7 +3,7 @@ use super::chain::*;
 use super::signedtransaction::*;
 use super::transaction::*;
 use super::wallet::*;
-use super::*;
+use super::{Hashable};
 
 #[test]
 fn transaction_hash() {
