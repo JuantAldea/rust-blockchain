@@ -112,12 +112,14 @@ impl Wallet {
 
     pub fn create_transaction(
         &mut self,
-        recipient: &Id,
-        amount: u128,
-    ) -> Result<Vec<Transaction>, WalletOperationResult> {
+        recipients: Vec<(&Id, u128)>,
+        //recipient
+        //amount: u128,
+    ) -> Result<Transaction, WalletOperationResult> {
+        let total_amount = recipients.iter().fold(0, |sum, (_, amount)| sum + amount );
         log::debug!(
             "##################### Creating transaction for {} coins #####################",
-            amount
+            total_amount
         );
 
         let mut sum: u128 = 0;
@@ -126,7 +128,7 @@ impl Wallet {
         log::debug!("Gathering UXTOs:");
 
         for uxto in self.uxtos.iter() {
-            if sum >= amount {
+            if sum >= total_amount {
                 break;
             }
             log::debug!("\tAdding UXTO: {}", uxto);
@@ -134,25 +136,41 @@ impl Wallet {
             sum += uxto.amount;
         }
 
-        if sum < amount {
+        if sum < total_amount {
             return Err(WalletOperationResult::NotEnoughtCoinsError);
         }
 
         log::debug!("Gathered INTXs worth of {} coins", sum);
 
-        assert!(sum >= amount);
+        assert!(sum >= total_amount);
 
         log::debug!("Preparing transactions:");
-        let mut transfers = vec![];
-        let mut processed_transfer = 0;
+        //let mut transfers = vec![];
+        //let mut processed_transfer = 0;
+
+        let tx_inputs = intxs.iter().map(|intx| (intx.block_id, intx.hash, intx.amount)).collect();
+        let tx_outputs = recipients.iter().map(|(recipient, amount)| (recipient.id, *amount)).collect();
+
+        let transaction = Transaction::new(
+            tx_inputs,
+            &self.id.id,
+            tx_outputs,
+        );
+
+        if transaction.validate() != BlockChainOperationResult::BlockChainOk {
+            return Err(WalletOperationResult::NotEnoughtCoinsError);
+        }
+
+/*
         for intx in intxs.iter() {
-            let fraction_to_transfer = cmp::min(amount - processed_transfer, intx.amount);
+            let fraction_to_transfer = cmp::min(total_amount - processed_transfer, intx.amount);
 
             processed_transfer += fraction_to_transfer;
 
             let transaction = Transaction::new(
-                intx.block_id,
-                &intx.hash,
+                //intx.block_id,
+                //&intx.hash,
+                tx_inputs
                 &self.id.id,
                 &recipient.id,
                 fraction_to_transfer,
@@ -176,19 +194,18 @@ impl Wallet {
                 transfers.push(transfer_difference);
             }
         }
-
+*/
         //remove used UXTOS from the wallet
-        for transfer in &transfers {
-            let used_uxto = &transfer.intx;
-            self.total_credits = self.total_credits.saturating_sub(transfer.amount);
-            if let Some(index) = self.uxtos.iter().position(|u| *used_uxto == u.hash) {
+        for input in &tx_inputs {
+            self.total_credits = self.total_credits.saturating_sub(input.2);
+            if let Some(index) = self.uxtos.iter().position(|u| input.1 == u.hash) {
                 self.uxtos.remove(index);
             }
         }
 
-        assert_eq!(amount, processed_transfer);
+
         log::debug!("##################### Transaction created #####################");
-        Ok(transfers)
+        Ok(transaction)
     }
 
     pub fn sign_transaction(&self, tx: &Transaction) -> SignedTransaction {

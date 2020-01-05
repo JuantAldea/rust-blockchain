@@ -9,22 +9,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(PartialEq, Debug)]
-pub enum BlockChainOperationResult {
-    BlockChainOk,
-    BlockChainUpdated,
-    BlockChainKept,
-    HashMismatchError,
-    ProofOfWorkError,
-    IndexMismatchError,
-    DoubleSpendingError,
-    TxIdNotFound,
-    InTxOwnershipError,
-    InTxTooSmallForTransaction,
-    InTxTooSmallForTransactionSet,
-    SignatureError,
-    SourceBlockIsNewerError,
-}
+
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct BlockChain {
@@ -205,6 +190,28 @@ impl BlockChain {
         }
 
         log::debug!("==================BLOCK IS VALID======================");
+        BlockChainOperationResult::BlockChainOk
+    }
+
+    pub fn validate_transaction(&self, signed_tx: &SignedTransaction) -> BlockChainOperationResult {
+        if tx.inputs == String::from("0").repeat(64) {
+            //This is a coinbase transaction
+            log::debug!("Coinbase Transaction. No input check needed.");
+            return BlockChainOperationResult::BlockChainOk;
+        }
+
+        BlockChainOperationResult::BlockChainOk
+    }
+
+    pub fn validate_transaction_input(&self, input: &InputData, sender: String) -> BlockChainOperationResult {
+        let source_block = self.chain[input.block_id as usize];
+        let source_tx = source_block.transactions[i];
+        if input. == String::from("0").repeat(64) {
+            //This is a coinbase transaction
+            log::debug!("Coinbase Transaction. No input check needed.");
+            return BlockChainOperationResult::BlockChainOk;
+        }
+
         BlockChainOperationResult::BlockChainOk
     }
 
