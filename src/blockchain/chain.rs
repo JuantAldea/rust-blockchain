@@ -18,7 +18,7 @@ pub enum BlockChainOperationResult {
     ProofOfWorkError,
     IndexMismatchError,
     DoubleSpendingError,
-    TxIdNotFound,
+    TxIdNotFoundError,
     InTxOwnershipError,
     InTxTooSmallForTransaction,
     InTxTooSmallForTransactionSet,
@@ -167,7 +167,7 @@ impl BlockChain {
 
             if intx.is_none() {
                 log::warn!("Input TXID not found in source block: FAIL");
-                return BlockChainOperationResult::TxIdNotFound;
+                return BlockChainOperationResult::TxIdNotFoundError;
             }
 
             let intx = intx.unwrap();
@@ -233,7 +233,6 @@ impl BlockChain {
 
     pub fn validate_transaction_inputs(
         &self,
-        //tx: &Transaction,
         tx_block: &Block,
         tx_index: usize,
         intx: &Transaction,
